@@ -1,12 +1,13 @@
 class Cladding:
-    def __init__(self, length, width, thickness):
+    def __init__(self, length, width, thickness, direction):
         self.materialType = "cladding"
         self.length = length
         self.width = width
         self.thickness = thickness
+        self.direction = direction
 
 
-claddingObj = Cladding(length, width, thickness)
+claddingObj = Cladding(length, width, thickness, direction)
 
 
 
