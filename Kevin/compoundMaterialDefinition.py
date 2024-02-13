@@ -28,10 +28,6 @@ class CompoundMaterial:
         return thicknessList
 
 
-
-
-
-
 compoundMaterialObj = CompoundMaterial(material_collection)
 materialList = compoundMaterialObj.new_materialList
 material_thickness = compoundMaterialObj.thicknessList

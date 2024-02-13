@@ -225,6 +225,7 @@ claddingGeoList = []
 layerTree = DataTree[object]()
 
 for id, (srfList, matList) in enumerate(zip(surfaceList.Branches, materialList.Branches)):
+    print(matList)
     mat = matList[0]
     if id == 0:
         for srf in srfList:
@@ -271,3 +272,6 @@ for id, (srfList, matList) in enumerate(zip(surfaceList.Branches, materialList.B
 
 allTypeMaterial = layerTree
 
+
+# class wallGenerate:
+#     def __init__(self, surfaceList, materialList, thicknessList):
