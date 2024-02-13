@@ -4,7 +4,8 @@ import scriptcontext as rs
 import time
 import math
 from ghpythonlib.components import Shatter, BoundarySurfaces, BrepXBrep
-from copy import deepcopy
+from copy import copy
+import threading
 
 brickLength, brickHeight = tempPattern
 
@@ -108,8 +109,7 @@ except:
         wallData[wallKey].check_value(initial_value_data)
 
 
-from copy import copy
-import threading
+
 
 
 class WallCalculate:
@@ -121,6 +121,13 @@ class WallCalculate:
         self.surface = wallObj.surface
         self.curve = wallObj.curve
         self.wallHeight = wallObj.height
+
+        self.demoForTile()
+        
+    
+
+
+    def demoForTile(self):
         self.extrusionStore = self.generatePattern()
         self.windowRectangle = self.buildWindow()
         self.facade = self.wallWithOpen()
@@ -191,20 +198,6 @@ class WallCalculate:
             with facade_lock:
                 facade.append(result[0])
 
-    # def _process_block(self, block, windowRect, facade, facade_lock):
-    #     # 如果 block 是 Extrusion 类型，则转换为 Brep
-    #     if isinstance(block, rg.Extrusion):
-    #         block = block.ToBrep()
-
-    #     # 同样，确保 windowRect 也是 Brep 类型
-    #     if isinstance(windowRect, rg.Extrusion):
-    #         windowRect = windowRect.ToBrep()
-
-    #     intersection = rg.Intersect.Intersection.BrepBrep(windowRect, block, 0.01)  # 0.01 是容差值
-    #     if intersection[0]:  # 检查是否有交集
-    #         with facade_lock:
-    #             facade.extend(intersection[1])  # intersection[1] 包含了交集的结果
-
 
 
 
@@ -229,12 +222,6 @@ except:
             wallFacadeObj = WallCalculate(wallData[wallKey], brickLength, brickHeight)
             wallCalculateData[wallData[wallKey].nickname] = wallFacadeObj
 
-
-# buildWall = WallCalculate(wallData["wall_0"], brickLength, brickHeight)
-# a = buildWall.windowRectangle
-# b = buildWall.extrusionStore
-# c = buildWall.surface
-# d = buildWall.facade
 
 
 class classForOutput:
