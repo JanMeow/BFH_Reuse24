@@ -1,0 +1,38 @@
+[
+  {
+    "bauteil_obergruppe": "Wandkonstruktion",
+    "bauteil_gruner": "Mauerwerk",
+    "uuid": "d12b1196-3656-420d-8bda-db10212b77a9",
+    "kosten": "FALSE",
+    "zustand": "Gebraucht",
+    "material": "Kalksandstein",
+    "ref_gebauede_geschoss": "9 UG1",
+    "breite": "FALSE",
+    "hoehe": "FALSE",
+    "tiefe": "FALSE",
+    "flaeche": "FALSE",
+    "masse": "FALSE",
+    "anzahl": "288",
+    "foto1": "/DCIM/bauelemente_20221103154337075.jpg",
+    "foto2": "/DCIM/bauelemente_20221103154356938.jpg",
+    "co2": "43"
+  },
+  {
+    "bauteil_obergruppe": "Wandkonstruktion",
+    "bauteil_gruner": "Betonwand",
+    "uuid": "11a264bd-ad82-4c1f-bf24-298d9ad3e489",
+    "kosten": "FALSE",
+    "zustand": "Gebraucht",
+    "material": "Beton",
+    "ref_gebauede_geschoss": "9 UG1",
+    "breite": "FALSE",
+    "hoehe": "FALSE",
+    "tiefe": "FALSE",
+    "flaeche": "FALSE",
+    "masse": "FALSE",
+    "anzahl": "2600",
+    "foto1": "/DCIM/bauelemente_20221103154617415.jpg",
+    "foto2": "/DCIM/bauelemente_20221103154634683.jpg",
+    "co2": "204"
+  }
+]

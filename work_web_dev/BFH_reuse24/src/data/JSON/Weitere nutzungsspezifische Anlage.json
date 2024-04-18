@@ -1,0 +1,38 @@
+[
+  {
+    "bauteil_obergruppe": "Weitere nutzungsspezifische Anlage",
+    "bauteil_gruner": "Compactus Anlagen",
+    "uuid": "846f9ea0-a492-4556-a19c-f4ac88640379",
+    "kosten": "3500",
+    "zustand": "Gebraucht",
+    "material": "Metall",
+    "ref_gebauede_geschoss": "9 OG3",
+    "breite": "FALSE",
+    "hoehe": "215",
+    "tiefe": "280",
+    "flaeche": "FALSE",
+    "masse": "FALSE",
+    "anzahl": "1",
+    "foto1": "/DCIM/bauelemente_20220420155826865.jpg",
+    "foto2": "/DCIM/bauelemente_20220420155835130.jpg",
+    "co2": "6860"
+  },
+  {
+    "bauteil_obergruppe": "Weitere nutzungsspezifische Anlage",
+    "bauteil_gruner": "Compactus Anlagen",
+    "uuid": "2055baa0-9ff6-445f-9d7a-19482ecd2180",
+    "kosten": "1800",
+    "zustand": "Gebraucht",
+    "material": "Metall",
+    "ref_gebauede_geschoss": "9 UG2",
+    "breite": "290",
+    "hoehe": "195",
+    "tiefe": "63",
+    "flaeche": "5.655",
+    "masse": "3.56265",
+    "anzahl": "9",
+    "foto1": "/DCIM/bauelemente_20220512143126388.jpg",
+    "foto2": "/DCIM/bauelemente_20220512143140254.jpg",
+    "co2": "1844"
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "bauteil_obergruppe": "Hartflaeche",
+    "bauteil_gruner": "Verbundsteine",
+    "uuid": "7d8151cd-be51-455a-8331-0b0f02c233fe",
+    "kosten": "FALSE",
+    "zustand": "Gebraucht",
+    "material": "Beton",
+    "ref_gebauede_geschoss": "Aussenraum EG",
+    "breite": "40",
+    "hoehe": "60",
+    "tiefe": "8",
+    "flaeche": "0.24",
+    "masse": "FALSE",
+    "anzahl": "305",
+    "foto1": "/DCIM/bauelemente_20231107145241718.JPG",
+    "foto2": "/DCIM/bauelemente_20231107145256583.JPG",
+    "co2": ""
+  }
+]

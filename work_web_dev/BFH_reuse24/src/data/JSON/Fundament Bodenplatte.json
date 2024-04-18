@@ -1,0 +1,20 @@
+[
+  {
+    "bauteil_obergruppe": "Fundament, Bodenplatte",
+    "bauteil_gruner": "Bodenplatte Beton",
+    "uuid": "0c193db6-22b6-4c3c-9216-ee6bb79c3465",
+    "kosten": "12",
+    "zustand": "Gebraucht",
+    "material": "Anderes",
+    "ref_gebauede_geschoss": "9 OG6",
+    "breite": "50",
+    "hoehe": "50",
+    "tiefe": "FALSE",
+    "flaeche": "0.25",
+    "masse": "FALSE",
+    "anzahl": "75",
+    "foto1": "/DCIM/bauelemente_20220509154239689.jpg",
+    "foto2": "/DCIM/bauelemente_20220509154251650.jpg",
+    "co2": "8"
+  }
+]

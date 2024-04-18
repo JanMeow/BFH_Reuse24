@@ -1,0 +1,38 @@
+[
+  {
+    "bauteil_obergruppe": "aeussere Wandbekleidung ueber Terrain",
+    "bauteil_gruner": "Sandwichpaneel",
+    "uuid": "2fde3236-5352-410c-a62e-810afbdf7468",
+    "kosten": "FALSE",
+    "zustand": "Gebraucht",
+    "material": "Alu/PUR",
+    "ref_gebauede_geschoss": "Waschanlage EG",
+    "breite": "100",
+    "hoehe": "1000",
+    "tiefe": "FALSE",
+    "flaeche": "10",
+    "masse": "FALSE",
+    "anzahl": "100",
+    "foto1": "/DCIM/bauelemente_20231107110844506.JPG",
+    "foto2": "/DCIM/bauelemente_20231107110948268.JPG",
+    "co2": ""
+  },
+  {
+    "bauteil_obergruppe": "aeussere Wandbekleidung ueber Terrain",
+    "bauteil_gruner": "Faserzementplatte",
+    "uuid": "6dc4c06f-f1d6-4a2b-8dca-042337748882",
+    "kosten": "FALSE",
+    "zustand": "Gebraucht",
+    "material": "Faserzement",
+    "ref_gebauede_geschoss": "56 EG",
+    "breite": "FALSE",
+    "hoehe": "FALSE",
+    "tiefe": "FALSE",
+    "flaeche": "FALSE",
+    "masse": "FALSE",
+    "anzahl": "300",
+    "foto1": "/DCIM/bauelemente_20231107150329710.JPG",
+    "foto2": "/DCIM/bauelemente_20231107150347954.JPG",
+    "co2": ""
+  }
+]
