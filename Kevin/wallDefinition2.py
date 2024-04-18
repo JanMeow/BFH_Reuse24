@@ -1,5 +1,5 @@
 import Rhino.Geometry as rg
-from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference
+from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference, AlignPlane, EvaluateLength, LineSDL, Project, RegionUnion
 import ghpythonlib.treehelpers as th
 import math
 from copy import copy, deepcopy
@@ -41,65 +41,113 @@ class CompoundMaterial:
         return thicknessList
 
 
-class wallGenerate:
-    def __init__(self, surfaceList, materialList, thicknessList):
+class innerMaterialGenerate:
+    def __init__(self, surfaceList, materialList, thicknessList, moduleDistance, wallFrame):
         self.surfaceList = surfaceList
         self.materialList = materialList
         self.thicknessList = thicknessList
+        self.moduleDistance = moduleDistance
+        self.wallFrame = wallFrame
 
-        basePlane = []
+        basePlane = [self.wallFrame]
         boardGeoList = []
         substructInfillGeoList = []
         paintGeoList = []
         substructGeoList = []
         claddingGeoList = []
+        self.materialInfoDict = {}
         layerTree = DataTree[object]()
+        layerTreeModule = DataTree[object]()
 
-        for id, (srfList, matList) in enumerate(zip(self.surfaceList, self.materialList)):
+        self.checkGeo = []
+
+        for self.id, (srfList, matList) in enumerate(zip(self.surfaceList, self.materialList)):
             mat = matList
             srfList = [srfList]
-            if id == 0:
-                for srf in srfList:
-                    uvP = SurfaceClosestPoint(Area(srf)[1], srf)[1]
-                    frame = EvaluateSurface(srf, uvP)[4]
-                    basePlane.append(frame)
             
             allTypeGeo = []
-            for srf_id, srf in enumerate(srfList):
-                workPlane = basePlane[srf_id]
+            for entireSrf_id, entireSrf in enumerate(srfList):
+                workPlane = basePlane[entireSrf_id]
                 matType = mat.materialType
-                # print(matType)
-                if matType == "board":
-                    boardGeo = self.create_board(srf, workPlane, mat.length, mat.width, mat.thickness, mat.direction)
-                    boardGeoList.append(boardGeo)
-                    allTypeGeo.append(boardGeo)
-                    
-                elif matType == "substructInfill":
-                    panelGeo, beamGeo = self.create_substructInfill(srf, workPlane, mat.width, mat.thickness, mat.distance, mat.direction)
-                    substructInfillGeoList.append(beamGeo)
-                    substructInfillGeoList.append(panelGeo)
-                    allTypeGeo.append(beamGeo)
-                    allTypeGeo.append(panelGeo)
+                srfList = self.create_module(entireSrf, workPlane, self.moduleDistance)
+                self.checkGeo.append(srfList)
 
-                elif matType == "paint":
-                    paintGeo = self.create_paint(srf, workPlane, mat.thickness)
-                    paintGeoList.append([paintGeo])
-                    allTypeGeo.append([paintGeo])
-                    
-                elif matType == "substruct":
-                    substructGeo = self.create_substruct(srf, workPlane, mat.width, mat.thickness, mat.distance, mat.direction)
-                    substructGeoList.append(substructGeo)
-                    allTypeGeo.append(substructGeo)
+                if self.id not in self.materialInfoDict:
+                    self.materialInfoDict[self.id] = {}
 
-                elif matType == "cladding":
-                    claddingGeo = self.create_cladding(srf, workPlane, mat.length, mat.width, mat.thickness, mat.direction)
-                    claddingGeoList.append(claddingGeo)
-                    allTypeGeo.append(claddingGeo)
+
+                for self.module_id, srf in enumerate(srfList):
+                    if self.module_id not in self.materialInfoDict[self.id]:
+                        self.materialInfoDict[self.id][self.module_id] = {}
+
+                    allTypeGeoModule = []
+                    if matType == "board":
+                        boardGeo = self.create_board(srf, workPlane, mat.length, mat.width, mat.thickness, mat.direction)
+                        boardGeoList.append(boardGeo)
+                        allTypeGeo.append(boardGeo)
+                        allTypeGeoModule.append(boardGeo)
+                        
+                    elif matType == "substructInfill":
+                        panelGeo, beamGeo = self.create_substructInfill(srf, workPlane, mat.width, mat.thickness, mat.distance, mat.direction)
+                        substructInfillGeoList.append(beamGeo)
+                        substructInfillGeoList.append(panelGeo)
+                        allTypeGeo.append(beamGeo)
+                        allTypeGeo.append(panelGeo)
+                        li = []
+                        li.extend(beamGeo)
+                        li.extend(panelGeo)
+                        allTypeGeoModule.append(li)
+
+                    elif matType == "paint":
+                        paintGeo = self.create_paint(srf, workPlane, mat.thickness)
+                        paintGeoList.append([paintGeo])
+                        allTypeGeo.append([paintGeo])
+                        allTypeGeoModule.append([paintGeo])
+                        
+                    elif matType == "substruct":
+                        substructGeo = self.create_substruct(srf, workPlane, mat.width, mat.thickness, mat.distance, mat.direction)
+                        substructGeoList.append(substructGeo)
+                        allTypeGeo.append(substructGeo)
+                        allTypeGeoModule.append(substructGeo)
+
+                    elif matType == "cladding":
+                        claddingGeo = self.create_cladding(srf, workPlane, mat.length, mat.width, mat.thickness, mat.direction)
+                        claddingGeoList.append(claddingGeo)
+                        allTypeGeo.append(claddingGeo)
+                        allTypeGeoModule.append(claddingGeo)
+                    
+                    path_module = GH_Path(array[int]([self.id, self.module_id]))
+                    layerTreeModule.AddRange(allTypeGeoModule, path_module)
+                    
                 
-            path = GH_Path(array[int]([0,0,id]))
+            path = GH_Path(array[int]([0,0,self.id]))
             layerTree.AddRange(allTypeGeo, path)
                 
         self.allTypeMaterial = layerTree
+        self.allTypeMaterialModule = layerTreeModule
+        
+
+
+    def create_module(self, surface, base_plane, distance):
+        def sortSurface(srfList, sortPlane):
+            # Calculate the center point of each surface's bounding box
+            centers = [srf.GetBoundingBox(True).Center for srf in srfList]
+            
+            # Project these center points onto the sortPlane's Y-axis and calculate distance from the plane's origin
+            distances = [sortPlane.YAxis * (center - sortPlane.Origin) for center in centers]
+            
+            # Sort the surfaces based on these distances
+            sortedSurfaces = [srf for _, srf in sorted(zip(distances, srfList))]
+            
+            return sortedSurfaces
+
+        base_plane = copy(base_plane)
+        base_plane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
+        curves, _ = self.create_contours(surface, base_plane, distance)
+        surfaceList = SurfaceSplit(surface, curves)
+        surfaceList = sortSurface(surfaceList, base_plane)
+
+        return surfaceList
 
 
     def create_contours(self, surface, base_plane, interval):
@@ -107,7 +155,7 @@ class wallGenerate:
         base_plane.Rotate(math.pi/2, base_plane.XAxis, base_plane.Origin)
         base_plane.Rotate(math.pi/10, base_plane.ZAxis, base_plane.Origin)
         contours = []
-        trimmed_contours = []
+        # trimmed_contours = []
 
         # Get the bounding box of the surface in the plane's coordinate system
         bbox = surface.GetBoundingBox(base_plane)
@@ -115,10 +163,23 @@ class wallGenerate:
         # Start and end values for contouring in the direction of the plane's normal
         start = bbox.Min.Z
         end = bbox.Max.Z
-
+        
         # Generate contours
-        z = start
-        while z <= end:
+        # z = start
+        # while z <= end:
+        #     # Create a plane parallel to the base plane at height z
+        #     contour_plane = rg.Plane(base_plane)
+        #     contour_plane.Translate(base_plane.Normal * z)
+
+        #     # Generate the contour
+        #     contour_curves = rg.Brep.CreateContourCurves(surface, contour_plane)
+        #     contours.extend(contour_curves)
+            
+        #     z += interval
+        
+        # =====================
+        z = end
+        while z >= start:
             # Create a plane parallel to the base plane at height z
             contour_plane = rg.Plane(base_plane)
             contour_plane.Translate(base_plane.Normal * z)
@@ -126,25 +187,17 @@ class wallGenerate:
             # Generate the contour
             contour_curves = rg.Brep.CreateContourCurves(surface, contour_plane)
             contours.extend(contour_curves)
+            
+            z -= interval
 
-            z += interval
 
-        # Get the edge curves of the surface
-        edge_curves = surface.DuplicateEdgeCurves()
 
-        boundary = rg.Curve.JoinCurves(edge_curves)[0]  # Join edge curves to form a single boundary curve
-        self.check = contours
-        
-        # Trim contours
-        # for contour in contours:
-        #     intersection_events = rg.Intersect.Intersection.CurveCurve(contour, boundary, 0.01, 0.01)
-        #     if intersection_events:
-        #         intersection_params = [event.ParameterA for event in intersection_events]
-        #         segments = contour.Split(intersection_params)
-        #         for segment in segments:
-        #             trimmed_contours.append(segment)
+        total_length = 0
+        for crv in contours:
+            total_length += crv.GetLength()
+            # print(crv.GetLength())
 
-        return contours
+        return (contours, int(total_length))
 
 
     def create_beam(self, curve, base_plane, width, height):
@@ -171,7 +224,6 @@ class wallGenerate:
         return swept_breps[0]
         
 
-
     def create_board(self, surface, base_plane, length, width, thickness, direction):
         if direction:
             firDirPlane = copy(base_plane)
@@ -184,8 +236,8 @@ class wallGenerate:
             secDirPlane = copy(base_plane)
             secDirPlane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
 
-        crvLength = self.create_contours(surface, firDirPlane, length)
-        crvWidth = self.create_contours(surface, secDirPlane, width)
+        crvLength, _ = self.create_contours(surface, firDirPlane, length)
+        crvWidth, _ = self.create_contours(surface, secDirPlane, width)
 
         crvCombine = []
         crvCombine.extend(crvLength)
@@ -194,17 +246,46 @@ class wallGenerate:
 
         panelGeoList = SurfaceSplit(surface, crvCombine)
 
-            # create panel geometry
+        # create panel geometry
         panelOffsetList = []
         boardSeam = 2
         for panel in panelGeoList:
             panelOffsetList.append(Extrude(panel, base_plane.ZAxis*thickness))
+
+        # Record Material using information.
+        boardArea = length*width
+        cuttedPiece = 0
+        for panel in panelGeoList:
+            area_properties = rg.AreaMassProperties.Compute(panel)
+            if area_properties is not None:
+                panelArea = area_properties.Area
+                if (boardArea - panelArea) > 100:
+                    cuttedPiece += 1
+
+        usedPiece = len(panelGeoList)
+        self.materialInfoDict[self.id][self.module_id]["typeName"] = "board"
+        self.materialInfoDict[self.id][self.module_id]["usedPiece"] = usedPiece
+        self.materialInfoDict[self.id][self.module_id]["cuttedPiece"] = cuttedPiece
+        self.materialInfoDict[self.id][self.module_id]["completedPiece"] = usedPiece - cuttedPiece
         
         return panelOffsetList
 
 
-
     def create_substructInfill(self, surface, base_plane, width, thickness, distance, direction):
+        def offset_surface_inner(surface, plane, distance, tolerance=0.01):
+            inner_distance = -abs(distance)
+            
+            # Offset the surface
+            print(type(surface))
+            offset_surface = surface.Offset(1000, tolerance)
+            
+            if offset_surface:
+                # Convert the offset surface to Brep
+                return offset_surface
+            else:
+                print("Offset operation failed.")
+                return None
+
         if direction:
             workPlane = copy(base_plane)
 
@@ -213,33 +294,60 @@ class wallGenerate:
             base_plane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
             workPlane = copy(base_plane)
         
-        substructCrv = self.create_contours(surface, workPlane, distance)
+        substructCrv, substructureLength = self.create_contours(surface, workPlane, distance)
 
         panelGeoList = SurfaceSplit(surface, substructCrv)
 
-
+        if isinstance(panelGeoList, list):
+            pass
+        else:
+            panelGeoList = [panelGeoList]
+   
         # create panel geometry
         panelOffsetList = []
+        totalArea = 0
         for panel in panelGeoList:
-            neg = OffsetCurve(panel, -width/2, base_plane, 1)
-            pos = OffsetCurve(panel, width/2, base_plane, 1)
-            if pos.GetLength() > neg.GetLength():
-                offsetResult = neg
+            # Assuming 'brep' is your Brep object and it's essentially a single surface
+            if panel.Faces.Count == 1:
+                surface = panel.Faces[0]
             else:
-                offsetResult = pos
+                print("The Brep contains multiple faces. Please specify which face to offset.")
+                # For this example, let's proceed with the first face
+                surface = panel.Faces[0]
             
-            panelOffsetSrf = BoundarySurfaces(offsetResult)
+            # panelOffsetSrf = offset_surface_inner(surface, base_plane, width/2)
+            panelOffsetSrf = panel
+
             panelOffsetList.append(Extrude(panelOffsetSrf, base_plane.ZAxis*thickness*0.8))
+
+            area_properties = rg.AreaMassProperties.Compute(panelOffsetSrf)
+            if area_properties is not None:
+                panelArea = area_properties.Area
+                totalArea += panelArea
 
         # create beam
         beamGeo = []
         for crv in substructCrv:
             beamGeo.append(self.create_beam(crv, base_plane, width, thickness))
+        
+        # self.materialInfoList.append((self.module_id, "substructInfill", substructureLength))
+        self.materialInfoDict[self.id][self.module_id]["typeName"] = "substructInfill"
+        self.materialInfoDict[self.id][self.module_id]["usedLength"] = substructureLength
+        self.materialInfoDict[self.id][self.module_id]["usedArea"] = int(totalArea)
 
         return (panelOffsetList, beamGeo)
 
 
     def create_paint(self, surface, base_plane, thickness):
+        area_properties = rg.AreaMassProperties.Compute(surface)
+        if area_properties is not None:
+            panelArea = area_properties.Area
+
+        self.materialInfoDict[self.id][self.module_id]["typeName"] = "paint"
+        self.materialInfoDict[self.id][self.module_id]["usedArea"] = None
+        self.materialInfoDict[self.id][self.module_id]["usedArea"] = int(panelArea)
+
+
         return Extrude(surface, base_plane.ZAxis*thickness)
 
 
@@ -252,12 +360,16 @@ class wallGenerate:
             base_plane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
             workPlane = copy(base_plane)
         
-        substructCrv = self.create_contours(surface, workPlane, distance)
+        substructCrv, substructureLength = self.create_contours(surface, workPlane, distance)
 
         # create beam
         beamGeo = []
         for crv in substructCrv:
             beamGeo.append(self.create_beam(crv, base_plane, width, thickness))
+        
+        # self.materialInfoList.append((self.module_id, "substruct", substructureLength))
+        self.materialInfoDict[self.id][self.module_id]["typeName"] = "substruct"
+        self.materialInfoDict[self.id][self.module_id]["usedLength"] = substructureLength
 
         return beamGeo
 
@@ -292,7 +404,6 @@ class wallGenerate:
         return panelOffsetList
 
 
-
 class generateCladding:
     """
     A class to generate cladding layouts based on various parameters such as window and wall geometries,
@@ -314,7 +425,7 @@ class generateCladding:
         verticalAngle: The angle of the cladding orientation vertically.
     """
 
-    def __init__(self, windowDB, doorDB, claddingDB, wallGeo, windowGeo, doorGeo, claddingWidth, claddingLength, kindNum, wWeight, lWeight, horizontalOverlap, verticalOverlap, horizontalAngle, verticalAngle, substructWidth, substructThickness, offsetDist):
+    def __init__(self, windowDB, doorDB, claddingDB, wallGeo, windowGeo, doorGeo, claddingWidth=299, claddingLength=399, kindNum=4, wWeight=5, lWeight=4, claddingDirection=False, horizontalOverlap=0, verticalOverlap=0, horizontalAngle=0, verticalAngle=0, substructWidth=40, substructThickness=20, offsetDist=0,**kwargs):
         """
         Initializes the GenerateCladding class with all the necessary attributes for cladding generation.
         """
@@ -330,6 +441,7 @@ class generateCladding:
         self.kindNum = kindNum
         self.wWeight = wWeight
         self.lWeight = lWeight
+        self.claddingDirection = claddingDirection
         self.horizontalOverlap = horizontalOverlap
         self.verticalOverlap = verticalOverlap
         self.horizontalAngle = horizontalAngle
@@ -337,12 +449,30 @@ class generateCladding:
         self.substructWidth = substructWidth
         self.substructThickness = substructThickness
         self.offsetDist = offsetDist + self.substructThickness
-
+        self.tileDimension = kwargs.get('tileDimension', None)
         
         # Find user's tile based on input criteria
-        id, width, length, quantity, self.longList = self.findCladding(self.claddingDB, self.claddingWidth, self.claddingLength, self.kindNum, self.wWeight, self.lWeight)
-        #print(width)
-        #print(length)
+        if self.tileDimension == None:
+            b1 = self.compare("claddingWidth", self.claddingWidth)
+            b2 = self.compare("claddingLength", self.claddingLength)
+            b3 = self.compare("kindNum", self.kindNum)
+            b4 = self.compare("wWeight", self.wWeight)
+            b5 = self.compare("lWeight", self.lWeight)
+            if  b1 or b2 or b3 or b4 or b5:
+                print("find tile!!")
+                id, width, length, quantity, self.longList = self.findCladding(self.claddingDB, self.claddingWidth, self.claddingLength, self.kindNum, self.wWeight, self.lWeight)
+                initial_data["longList"] = self.longList
+                initial_data["width"] = width
+                initial_data["length"] = length
+            else:
+                print("don't find again")
+                width = initial_data["width"]
+                length = initial_data["length"]
+                self.longList = initial_data["longList"]
+
+        else:
+            print("start customize tile process")
+            width, length, self.longList = self.customizedCladding(self.tileDimension)
 
 
         # build mapping for width and length
@@ -374,12 +504,9 @@ class generateCladding:
 
         self.midCurve = self.getMidCurve(self.columnLine)
 
+
         # Generate basic wall geometry for inner material
-        innerGeo = RegionDifference(self.claddingGeo, self.orientedDoorGeoList, self.wallFrame)
-        self.allGeo = []
-        self.allGeo.append(innerGeo)
-        self.allGeo.extend(self.windowForFinalList)
-        self.wallForInnerGeo = self.offset_brep(BoundarySurfaces(self.allGeo), [-self.offsetDist])[0]
+        self.wallForInnerGeo = self.calculateInnerGeo(self.windowForFinalList, self.doorForFinalList)
 
         # Find the target lines for cladding searching algorithm.
         self.targetLines, self.targetLinesLength = self.trimWithRegion(self.midCurve, self.orientedWindowGeoList, self.orientedDoorGeoList, self.wallFrame)
@@ -388,20 +515,40 @@ class generateCladding:
         targetsLengthflatten = [int(t) for t in list(chain.from_iterable(self.targetLinesLength))]
         sourceLength = [int(s) for s in self.longList]
 
-        if self.compare("targetsLengthflatten", targetsLengthflatten) or self.compare("sourceLength", sourceLength) or "combinationGraph" not in initial_data:
-            # Use cladding sarching algorithm.
-            self.combinationGraph = self.calculateTarget(self.longList, self.targetLinesLength, 100)
-            initial_data["combinationGraph"] = self.combinationGraph
-        else:
-            self.combinationGraph = initial_data["combinationGraph"]
+        # Sometimes, when I moved opening, it happens error due to the crack of evaluate length in self.generateCladdingByTarget. Thus, I use "try" here to initialize everything again.
+        toler = (self.minTileLength+self.verticalOverlap)*0.4
+        try:
+            if self.compare("targetsLengthflatten", targetsLengthflatten) or self.compare("sourceLength", sourceLength) or "combinationGraph" not in initial_data:
+                # Use cladding sarching algorithm.
+                self.combinationGraph = self.calculateTarget(self.longList, self.targetLinesLength, toler)
+                initial_data["combinationGraph"] = self.combinationGraph
+            else:
+                self.combinationGraph = initial_data["combinationGraph"]
 
-        # put tile onto the line according to result of calculation.
-        self.tileLocation = self.generateCladdingByTarget(self.targetLines, self.originalCoGraft, self.combinationGraph)
+            # put tile onto the line according to result of calculation.
+            self.tileLocation = self.generateCladdingByTarget(self.targetLines, self.originalCoGraft, self.combinationGraph)
 
-        self.substructureGeo = self.addSubstructure(self.substructureList, self.substructWidth, self.substructThickness)
+            self.substructureGeo = self.addSubstructure(self.substructureList, self.substructWidth, self.substructThickness)
+        except:
+            print("happpen errrorrrr!!!!")
+            initial_data = {}
+            if self.compare("targetsLengthflatten", targetsLengthflatten) or self.compare("sourceLength", sourceLength) or "combinationGraph" not in initial_data:
+                # Use cladding sarching algorithm.
+                self.combinationGraph = self.calculateTarget(self.longList, self.targetLinesLength, toler)
+                initial_data["combinationGraph"] = self.combinationGraph
+            else:
+                self.combinationGraph = initial_data["combinationGraph"]
+
+            # put tile onto the line according to result of calculation.
+            self.tileLocation = self.generateCladdingByTarget(self.targetLines, self.originalCoGraft, self.combinationGraph)
+
+            self.substructureGeo = self.addSubstructure(self.substructureList, self.substructWidth, self.substructThickness)
 
         
     def compare(self, name, data):
+        if not isinstance(data, list):
+            data = [data]
+
         if name not in initial_data:
             initial_data[name] = data
             return True
@@ -411,6 +558,14 @@ class generateCladding:
             else:
                 initial_data[name] = data
                 return True
+
+
+    def alignToZ(self, targetPlane):
+        finalPlane = copy(targetPlane)
+        finalPlane = AlignPlane(finalPlane, rg.Vector3d.ZAxis)[0]
+        finalPlane.Rotate(-math.pi/2, finalPlane.ZAxis, finalPlane.Origin)
+
+        return finalPlane
 
 
     def offset_brep(self, brep, distances, tolerance=0.01):
@@ -435,6 +590,19 @@ class generateCladding:
         else:
             # If the current element is not a list, replace it with zero
             return []
+
+
+    def customizedCladding(self, tile_list):
+        width = []
+        length = []
+        longList = []
+        for tileClass in tile_list:
+            w, l, q = tileClass.tileData.width, tileClass.tileData.height, int(tileClass.tileData.quantity)
+            width.append(w)
+            length.append(l)
+            longList.extend([l]*q)
+        
+        return (width, length, longList)
 
 
     def findWindow(self, windowDB, userWindowGeoList, gridWidth, tolerance):
@@ -656,6 +824,7 @@ class generateCladding:
 
 
     def findCladding(self, claddingDB, searchWidth, searchLength, kindNum, wWeight, lWeight):
+        print("searching cladding now...")
         widthDB = []
         lengthDB = []
         quantityDB = []
@@ -709,7 +878,6 @@ class generateCladding:
         base_plane = rg.Plane(base_point, direct)
         
         contours = []
-        trimmed_contours = []
 
         # Get the bounding box of the surface in the plane's coordinate system
         bbox = surface.GetBoundingBox(base_plane)
@@ -731,20 +899,8 @@ class generateCladding:
 
             z += interval
 
-        # Get the edge curves of the surface
-        edge_curves = surface.DuplicateEdgeCurves()
-        boundary = rg.Curve.JoinCurves(edge_curves)[0]  # Join edge curves to form a single boundary curve
-        
-        # Trim contours
-        for contour in contours:
-            intersection_events = rg.Intersect.Intersection.CurveCurve(contour, boundary, 0.01, 0.01)
-            if intersection_events:
-                intersection_params = [event.ParameterA for event in intersection_events]
-                segments = contour.Split(intersection_params)
-                for segment in segments:
-                    trimmed_contours.append(segment)
 
-        return trimmed_contours
+        return contours
 
 
     def generateTileColumn(self, wallGeo, gridDist):
@@ -768,8 +924,24 @@ class generateCladding:
         else:
             print("Failed to compute area properties.")
         
+        # # Align wallFrame's YAxis to global ZAxis
+        # global_z_axis = rg.Vector3d.ZAxis
+        # angle = rg.Vector3d.VectorAngle(wallGeo_Frame.YAxis, global_z_axis)
+        
+        # # Determine the direction of rotation (clockwise or counter-clockwise)
+        # cross_product = rg.Vector3d.CrossProduct(wallGeo_Frame.YAxis, global_z_axis)
+        # if cross_product * wallGeo_Frame.ZAxis < 0:  # If cross product is in opposite direction to frame's Z-axis
+        #     angle = -angle
+        
+        # # Rotate the frame around its Z-axis
+        # wallGeo_Frame.Rotate(angle, wallGeo_Frame.ZAxis, wallGeo_Frame.Origin)
+        
+        wallGeo_Frame = self.alignToZ(wallGeo_Frame)
+        
+        
         if wallGeo_Frame is not None:
             cutDirect = -AlignPlane(wallGeo_Frame, rg.Vector3d.ZAxis)[0].YAxis
+
             columnLine = self._create_contours(wallGeo, colBasePt, cutDirect, gridDist)
             return (columnLine, wallGeo_Frame, cutDirect)
         else:
@@ -821,12 +993,14 @@ class generateCladding:
             success, uvPU, uvPV = windowGeo.ClosestPoint(centroid)
             if success:
                 success, windowFrame = windowGeo.FrameAt(uvPU, uvPV)
+                windowFrame = self.alignToZ(windowFrame)
                 windowFrameOrigin = windowFrame.Origin
             
             # Get frame that closest to user's geometry's centroid
             success, uvPU, uvPV = wallGeo.ClosestPoint(windowFrameOrigin)
             if success:
                 success, windowFrameOnWall = wallGeo.FrameAt(uvPU, uvPV)
+                windowFrameOnWall = self.alignToZ(windowFrameOnWall)
             
             area_properties = rg.AreaMassProperties.Compute(chosenGeo)
             if area_properties is not None:
@@ -928,12 +1102,14 @@ class generateCladding:
             success, uvPU, uvPV = doorGeo.ClosestPoint(centroid)
             if success:
                 success, doorFrame = doorGeo.FrameAt(uvPU, uvPV)
+                doorFrame = self.alignToZ(doorFrame)
                 doorFrameOrigin = doorFrame.Origin
             
             # Get frame that closest to user's geometry's centroid
             success, uvPU, uvPV = wallGeo.ClosestPoint(doorFrameOrigin)
             if success:
                 success, doorFrameOnWall = wallGeo.FrameAt(uvPU, uvPV)
+                doorFrameOnWall = self.alignToZ(doorFrameOnWall)
             
             area_properties = rg.AreaMassProperties.Compute(chosenGeo)
             if area_properties is not None:
@@ -995,6 +1171,18 @@ class generateCladding:
         return midLine
 
 
+    def calculateInnerGeo(self, windowList, doorList):
+        # Generate basic wall geometry for inner material
+        allGeo = []
+        allGeo.extend(windowList)
+        allGeo.extend(doorList)
+        reAllGeo = RegionUnion(allGeo, self.wallFrame)
+        innerGeo = RegionDifference(self.claddingGeo, reAllGeo, self.wallFrame)
+        wallForInnerGeo = self.offset_brep(BoundarySurfaces(innerGeo), [-self.offsetDist])[0]
+
+        return wallForInnerGeo
+
+
     def trimWithRegion(self, midCurves, windowGeo, doorGeo, basePlane):
         def move_largest_x_points(points, plane, distance):
             # Transform points to the plane's coordinate system
@@ -1019,181 +1207,310 @@ class generateCladding:
             
             return final_points
         
-        def split_curve_by_points(curve, points):
-            curve = curve.ToNurbsCurve()
-            # List to store parameters on the curve corresponding to the points
-            parameters = []
+        # def split_curve_by_points(curve, points):
+        #     print(type(curve))
+        #     curve = curve.ToNurbsCurve()
+        #     # List to store parameters on the curve corresponding to the points
+        #     parameters = []
 
-            # Convert each point to a parameter on the curve
-            for point in points:
-                rc, t = curve.ClosestPoint(point, 20)
-                if rc:  # If the closest point was successfully found
-                    parameters.append(t)
+        #     # Convert each point to a parameter on the curve
+        #     for point in points:
+        #         rc, t = curve.ClosestPoint(point, 20)
+        #         if rc:  # If the closest point was successfully found
+        #             parameters.append(t)
 
-            # Split the curve at the collected parameters
-            split_curves = curve.Split(parameters)
+        #     # Split the curve at the collected parameters
+        #     split_curves = curve.Split(parameters)
 
-            return split_curves
-        
+        #     return split_curves
 
-        # Search the tile column adjoin the right side of window.
-        self.compensatedWindowGeo = []
-        self.compensatedWindowGeoNext = []
-        self.compensatedDoorGeo = []
-        self.compensatedDoorGeoNext = []
-        for winb in windowGeo:
-            winVerticesPt = [vertex.Location for vertex in winb.Vertices]
-            winVerticesPt = move_largest_x_points(winVerticesPt, basePlane, self.horizontalOverlap/2)
-            winVerticesPtforNext = move_largest_x_points(winVerticesPt, basePlane, self.gridDist)
-            winVerticesPt.append(winVerticesPt[0])
-            winVerticesPtforNext.append(winVerticesPtforNext[0])
-            
-            self.compensatedWindowGeo.append(rg.Polyline(winVerticesPt))
-            self.compensatedWindowGeoNext.append(rg.Polyline(winVerticesPtforNext))
+        def split_curve_by_points(curves, points, height):
+            ptNum = len(points)
+            tileTotalHeigth = self.minTileLength * (ptNum-1)
 
-        for doorb in doorGeo:
-            doorVerticesPt = [vertex.Location for vertex in doorb.Vertices]
-            doorVerticesPt = move_largest_x_points(doorVerticesPt, basePlane, self.horizontalOverlap/2)
-            doorVerticesPtforNext = move_largest_x_points(doorVerticesPt, basePlane, self.gridDist)
-            doorVerticesPt.append(doorVerticesPt[0])
-            doorVerticesPtforNext.append(doorVerticesPtforNext[0])
-            
-            self.compensatedDoorGeo.append(rg.Polyline(doorVerticesPt))
-            self.compensatedDoorGeoNext.append(rg.Polyline(doorVerticesPtforNext))
-            
-        self.compensatedCombineGeo = self.compensatedWindowGeo
-        self.compensatedCombineGeo.extend(self.compensatedDoorGeo)
-
-        self.CoIfCut = []
-        self.Co = []
-        for midCrv in midCurves:
-            oneCrvCi, oneCrvCo = TrimwithRegions(midCrv, self.compensatedCombineGeo, basePlane)
-            if oneCrvCi != None:
-                if isinstance(oneCrvCo, list):
-                    self.Co.extend(oneCrvCo)
-                    self.CoIfCut.extend([True, True])
-                else:
-                    self.Co.append(oneCrvCo)
-                    self.CoIfCut.append(True)
+            # check if cutting point overlap with the below window
+            changeBool = False
+            for curve in curves:
+                firPt = points[0]
+                rc, t = curve.ClosestPoint(firPt, 1)
+                if abs(curve.GetLength()-self.minTileLength)<10 and rc:
+                    changeBool = True
+                    print("overlap, ver 1")
+                    temp_pt = curve.PointAt(t)
+                    ptAtStart = curve.PointAtStart
+                    dist = temp_pt.DistanceTo(ptAtStart)
+                    trans = rg.Transform.Translation(self.wallFrame.YAxis*dist)
+            if changeBool:
+                newPoints = []
+                for pt in points:
+                    n_pt = deepcopy(pt)
+                    n_pt.Transform(trans)
+                    newPoints.append(n_pt)
+                if tileTotalHeigth + dist - height > self.minTileLength:
+                    newPoints = newPoints[:-1]
             else:
-                self.Co.extend([oneCrvCo])
-                self.CoIfCut.extend([False])
+                newPoints = deepcopy(points)
+            
 
-        self.originalCo = deepcopy(self.Co)
-        self.originalCoGraft = [[c] for c in self.originalCo]
+            # check if cutting point too approach to the bottom tile position
+            changeBool2 = False
+            for curve in curves:
+                firPt = newPoints[0]
+                rc, t = curve.ClosestPoint(firPt, 1)
+                ptAtEnd = curve.PointAtEnd
+                if rc:
+                    temp_pt = curve.PointAt(t)
+                    dist2 = temp_pt.DistanceTo(ptAtEnd)
+                    if dist2 < self.minTileLength and dist2>0.1:
+                        print("too closed, ver2")
+                        changeBool2 = True
+                        trans2 = rg.Transform.Translation(-self.wallFrame.YAxis*dist2)
+            
+            if changeBool2:
+                newPoints2 = []
+                for pt in newPoints:
+                    n_pt = deepcopy(pt)
+                    n_pt.Transform(trans2)
+                    newPoints2.append(n_pt)
+                n_pt = deepcopy(newPoints2[-1])
+                trans3 = rg.Transform.Translation(self.wallFrame.YAxis*self.minTileLength)
+                dist3 = self.minTileLength
+                
+                if tileTotalHeigth - dist2 + dist3 - height  < self.minTileLength + self.verticalOverlap:
+                    print("too closed, and delete the last")
+                    n_pt.Transform(trans3)
+                    newPoints2.append(n_pt)
+            else:
+                newPoints2 = deepcopy(newPoints)
 
-        trimedCo = [] # Store shorten Crv
-        for crv in self.Co:
-            tForTouch = 10
-            crv = crv.Trim(rg.CurveEnd.Start, tForTouch)
-            crv = crv.Trim(rg.CurveEnd.End, tForTouch)
-            trimedCo.append(crv)
+
+            all_split_curves = []  # List to store lists of split curves for each input curve
+            for curve in curves:
+                curve = curve.ToNurbsCurve()
+                parameters = []  # List to store parameters on the curve corresponding to the points
+                # Convert each point to a parameter on the curve
+                for point in newPoints2:
+                    rc, t = curve.ClosestPoint(point, 10)
+                    if rc:  # If the closest point was successfully found
+                        parameters.append(t)
+
+                # Split the curve at the collected parameters
+                split_curves = curve.Split(parameters)
+                if split_curves:  # Check if any curves were actually split
+                    all_split_curves.extend(list(split_curves))
+                else:
+                    all_split_curves.extend([curve])  # Append an empty list if no splits were made
+
+            return all_split_curves
+
+
+        def sort_geometry(polylines, plane):
+            def to_plane_coordinates(point, plane):
+                # Create a transformation from World XY to the target plane
+                xform = rg.Transform.PlaneToPlane(rg.Plane.WorldXY, plane)
+                
+                # Create a copy of the point to avoid modifying the original
+                transformed_point = rg.Point3d(point)
+                
+                # Apply the transformation
+                transformed_point.Transform(xform)
+                
+                return transformed_point
+
+            # Function to get the minimum Z value of a polyline's control points in the plane's coordinates
+            def min_Y_in_plane(polyline, plane):
+                transformed_points = [to_plane_coordinates(pt, plane) for pt in polyline]
+                min_Y = max(pt.Y for pt in transformed_points)
+                return min_Y
+            
+            def polyline_height(polyline, plane):
+                transformed_points = [to_plane_coordinates(pt, plane) for pt in polyline]
+                min_Y = min(pt.Y for pt in transformed_points)
+                max_Y = max(pt.Y for pt in transformed_points)
+                # Calculate height as the difference between max and min Y values
+                height = max_Y - min_Y
+                return height
+
+            # Sort the polylines by the minimum Z value of their control points in the plane's coordinates
+            sorted_polylines = sorted(polylines, key=lambda pl: min_Y_in_plane(pl, plane), reverse=True)
+            # Calculate height for each polyline and pair it with the polyline
+            polylines_with_height = [polyline_height(pl, plane) for pl in sorted_polylines]
+
+            return (sorted_polylines, polylines_with_height)
+
+
+        # In condition that wall doesn't have opening.
+        if len(windowGeo) == 0 and len(doorGeo) == 0:
+            self.Co = [crv.ToNurbsCurve() for crv in midCurves]
+
+            
+            self.originalCo = deepcopy(self.Co)
+            self.CoGraft = [[c] for c in self.originalCo]
+            self.originalCoGraft = [[c] for c in self.originalCo]
+
+            extendCo = deepcopy(self.Co)
+            for index, crv in enumerate(self.Co):
+                extendCo[index] = extendCo[index].Extend(rg.CurveEnd.Start, self.verticalOverlap, 0)
+                extendCo[index] = [extendCo[index].Extend(rg.CurveEnd.End, self.verticalOverlap, 0)]
+                # Here self.Co format is changed into nest structure.
+    
+            extendCoLength = deepcopy(extendCo)
+            for gId, group in enumerate(extendCo):
+                for cId, crv in enumerate(group):
+                    extendCoLength[gId][cId] = crv.GetLength()
+
+            return (extendCo, extendCoLength)
         
-        # Manage window side curve
-        ptsAndIdWin = []
-        sideIdWin = []
-        for i, (crv, crvIfCut) in enumerate(zip(trimedCo, self.CoIfCut)):
-            pts = []
-            id = None
-            for windowCrv in self.compensatedWindowGeoNext:
-                    eventsWin = rg.Intersect.Intersection.CurveCurve(crv.ToNurbsCurve(), windowCrv.ToNurbsCurve(), 0.1, 0.1)
-                    if eventsWin and not crvIfCut:
-                        id = i
-                        for j in range(len(eventsWin)):
-                            pts.append(eventsWin[j].PointA)
+        else:
+            # Search the tile column adjoin the right side of window.
+            # Calculate the compenstion for openings
+            self.compensatedWindowGeo = []
+            self.compensatedWindowGeoNext = []
+            self.compensatedDoorGeo = []
+            self.compensatedDoorGeoNext = []
+            for winb in windowGeo:
+                winVerticesPt = [vertex.Location for vertex in winb.Vertices]
+                winVerticesPt = move_largest_x_points(winVerticesPt, basePlane, self.horizontalOverlap/2)
+                winVerticesPtforNext = move_largest_x_points(winVerticesPt, basePlane, self.gridDist)
+                winVerticesPt.append(winVerticesPt[0])
+                winVerticesPtforNext.append(winVerticesPtforNext[0])
+                
+                self.compensatedWindowGeo.append(rg.Polyline(winVerticesPt))
+                self.compensatedWindowGeoNext.append(rg.Polyline(winVerticesPtforNext))
+
+            for doorb in doorGeo:
+                doorVerticesPt = [vertex.Location for vertex in doorb.Vertices]
+                doorVerticesPt = move_largest_x_points(doorVerticesPt, basePlane, self.horizontalOverlap/2)
+                doorVerticesPtforNext = move_largest_x_points(doorVerticesPt, basePlane, self.gridDist)
+                doorVerticesPt.append(doorVerticesPt[0])
+                doorVerticesPtforNext.append(doorVerticesPtforNext[0])
+                
+                self.compensatedDoorGeo.append(rg.Polyline(doorVerticesPt))
+                self.compensatedDoorGeoNext.append(rg.Polyline(doorVerticesPtforNext))
+                
+            self.compensatedCombineGeo = self.compensatedWindowGeo
+            self.compensatedCombineGeo.extend(self.compensatedDoorGeo)
+
+
+            self.Co = []
+            for midCrv in midCurves:
+                oneCrvCi, oneCrvCo = TrimwithRegions(midCrv, self.compensatedCombineGeo, basePlane)
+                # when trimming with opening
+                if oneCrvCi != None:
+                    # when trimming with window, it will output list
+                    if isinstance(oneCrvCo, list):
+                        self.Co.extend(oneCrvCo)
+                    # when triming with door, it will output one obj
+                    else:
+                        self.Co.append(oneCrvCo)
+                # when trimming with nothing, add original curve
+                else:
+                    self.Co.extend([oneCrvCo])
             
-            if id is not None:
-                ptsAndIdWin.append((id, pts))
-                sideIdWin.append(id)
+            self.originalCo = deepcopy(self.Co)
+            self.CoGraft = [[c] for c in self.originalCo]
+            self.originalCoGraft = [[c] for c in self.originalCo]
 
-        for (id, TwoPts), windowPlane in zip(ptsAndIdWin, self.finalWindowPlaneList):
-            dist = TwoPts[0].DistanceTo(TwoPts[1])
-            sideTileNum = math.ceil((dist + self.verticalOverlap)/self.minTileLength)
-            downTowardDist = self.minTileLength*sideTileNum/2
-            downTowardDirect = - windowPlane.YAxis * downTowardDist
-            averPt = (TwoPts[0] + TwoPts[1])/2
-            trans = rg.Transform.Translation(downTowardDirect)
-            averPt.Transform(trans)
-            moveSeries = [rg.Transform.Translation(windowPlane.YAxis*self.minTileLength*i) for i in range(int(sideTileNum+1))]
-
-            ptSeries = []
-            for trans in moveSeries:
-                pt = copy(averPt)
-                pt.Transform(trans)
-                ptSeries.append(pt)
-            
-            splittedCrv = split_curve_by_points(self.Co[id], ptSeries)
-            splittedCrv[0] = splittedCrv[0].Extend(rg.CurveEnd.Start, self.verticalOverlap*2, 0)
-            splittedCrv[-1] = splittedCrv[-1].Extend(rg.CurveEnd.End, self.verticalOverlap*2, 0)
-
-            self.Co[id] = []
-            self.Co[id] = list(splittedCrv)
+            trimedCo = [] # Store shorten Crv
+            # print(self.Co)
+            for crv in self.Co:
+                tForTouch = 10
+                crv = crv.Trim(rg.CurveEnd.Start, tForTouch)
+                crv = crv.Trim(rg.CurveEnd.End, tForTouch)
+                trimedCo.append(crv)
 
 
-        # Manage door side curve
-        ptsAndIdDoor = []
-        sideIdDoor = []
-        for i, (crv, crvIfCut) in enumerate(zip(trimedCo, self.CoIfCut)):
-            pts = []
-            id = None
-            for doorCrv in self.compensatedDoorGeoNext:
-                    eventsDoor= rg.Intersect.Intersection.CurveCurve(crv.ToNurbsCurve(), doorCrv.ToNurbsCurve(), 0.1, 0.1)
-                    if eventsDoor and not crvIfCut:
-                        id = i
-                        resultPt = None
-                        endPt, startPt = crv.PointAtEnd, crv.PointAtStart
-                        if endPt.Z < startPt.Z:
-                            resultPt = endPt
+            # Manage window side curve
+            self.compensatedOpeningGeoNext = []
+            self.compensatedOpeningGeoNext.extend(self.compensatedWindowGeoNext)
+            self.compensatedOpeningGeoNext.extend(self.compensatedDoorGeoNext)
+
+            self.compensatedOpeningGeoNext, heightList = sort_geometry(self.compensatedOpeningGeoNext, self.wallFrame)
+
+            self.checkCutting = []
+            sideId = []
+
+            for i, (trim_crv, crv) in enumerate(zip(trimedCo, self.Co)):
+                for openCrv_next, height in zip(self.compensatedOpeningGeoNext, heightList):
+                    openCrv_next_Geo = BoundarySurfaces(openCrv_next)
+                    crvProject = Project(crv, openCrv_next_Geo, self.wallFrame.ZAxis)
+                    if crvProject != None:
+                        dist = crvProject.GetLength()
+                        sideTileNum = math.ceil((dist + self.verticalOverlap)/self.minTileLength)
+                        stPt = crvProject.PointAtStart
+                        endPt = crvProject.PointAtEnd
+
+                        temp_closest_pt_st = openCrv_next.ClosestPoint(stPt)
+                        dist_st = temp_closest_pt_st.DistanceTo(stPt)
+
+                        temp_closest_pt_end = openCrv_next.ClosestPoint(endPt)
+                        dist_end = temp_closest_pt_end.DistanceTo(endPt)
+
+                        if dist_st < dist_end or abs(dist_st-dist_end)<10:
+                            vec = stPt - endPt
+                            vec.Unitize()
+                            seriesStartPt = endPt
+
                         else:
-                            resultPt = startPt
-                        for j in range(len(eventsDoor)):
-                            pts.append(eventsDoor[j].PointA)
-                            pts.append(resultPt)
+                            vec = endPt - stPt
+                            vec.Unitize()
+                            seriesStartPt = stPt
+
+                        
+                        moveSeries = [rg.Transform.Translation(vec*self.minTileLength*k) for k in range(int(sideTileNum+1))]
+
+                        ptSeries = []
+                        for trans in moveSeries:
+                            pt = copy(seriesStartPt)
+                            pt.Transform(trans)
+                            ptSeries.append(pt)
+                        
+                        
+
+                        print("ptSeries", len(ptSeries))
+                        splittedCrv = split_curve_by_points(self.CoGraft[i], ptSeries, height)
+                        self.checkCutting.append((self.CoGraft[i], ptSeries))
+                        # print(splittedCrv[0])
+                        # splittedCrv[0] = splittedCrv[0].Extend(rg.CurveEnd.Start, self.verticalOverlap*2, 0)
+                        # splittedCrv[-1] = splittedCrv[-1].Extend(rg.CurveEnd.End, self.verticalOverlap*2, 0)
+
+                        sideId.append(i)
+
+                        self.CoGraft[i] = list(splittedCrv)
+
             
-            if id is not None:
-                ptsAndIdDoor.append((id, pts))
-                sideIdDoor.append(id)
+            sideId = list(set(sideId))
+            print(sideId)
+            extendCo = deepcopy(self.CoGraft)
+            for g_index, crvList in enumerate(self.CoGraft):
+                if g_index in sideId:
+                    temp_list = []
+                    for crvId, crv in enumerate(crvList):
+                        if abs(crv.GetLength() - self.minTileLength) < 1:
+                            pass
+                        elif crvId == 0:
+                            crv = crv.Extend(rg.CurveEnd.Start, self.verticalOverlap, 0)
+                        else:
+                            crv = crv.Extend(rg.CurveEnd.End, self.verticalOverlap, 0)
+                        temp_list.append(crv)
+                else:
+                    temp_list = []
+                    for crv in crvList:
+                        
+                        crv = crv.Extend(rg.CurveEnd.Start, self.verticalOverlap, 0)
+                        crv = crv.Extend(rg.CurveEnd.End, self.verticalOverlap, 0)
+                        temp_list.append(crv)
+                
+                extendCo[g_index] = temp_list
 
-        for (id, TwoPts), doorPlane in zip(ptsAndIdDoor, self.finalDoorPlaneList):
-            dist = TwoPts[0].DistanceTo(TwoPts[1])
-            sideTileNum = math.ceil((dist + self.verticalOverlap)/self.minTileLength)
-            # downTowardDist = self.minTileLength*sideTileNum/2
-            downTowardDist = dist/2
-            downTowardDirect = - doorPlane.YAxis * downTowardDist
-            averPt = (TwoPts[0] + TwoPts[1])/2
-            trans = rg.Transform.Translation(downTowardDirect)
-            averPt.Transform(trans)
-            moveSeries = [rg.Transform.Translation(doorPlane.YAxis*self.minTileLength*i) for i in range(int(sideTileNum+1))]
 
-            ptSeries = []
-            for trans in moveSeries:
-                pt = copy(averPt)
-                pt.Transform(trans)
-                ptSeries.append(pt)
+            extendCoLength = deepcopy(extendCo)
+            for gId, group in enumerate(extendCo):
+                for cId, crv in enumerate(group):
+                    extendCoLength[gId][cId] = crv.GetLength()
             
-            splittedCrv = split_curve_by_points(self.Co[id], ptSeries)
-            splittedCrv[0] = splittedCrv[0].Extend(rg.CurveEnd.Start, self.verticalOverlap*2, 0)
-            splittedCrv[-1] = splittedCrv[-1].Extend(rg.CurveEnd.End, self.verticalOverlap*2, 0)
-
-            self.Co[id] = []
-            self.Co[id] = list(splittedCrv)
-
-
-        extendCo = deepcopy(self.Co)
-        for index, crv in enumerate(self.Co):
-            if index in sideIdWin or index in sideIdDoor:
-                continue
-            extendCo[index] = extendCo[index].Extend(rg.CurveEnd.Start, self.verticalOverlap, 0)
-            extendCo[index] = [extendCo[index].Extend(rg.CurveEnd.End, self.verticalOverlap, 0)]
-            # Here self.Co format is changed into nest structure.
-  
-        extendCoLength = deepcopy(extendCo)
-        for gId, group in enumerate(extendCo):
-            for cId, crv in enumerate(group):
-                extendCoLength[gId][cId] = crv.GetLength()
-        
-        self.trimedCo = trimedCo
-        return (extendCo, extendCoLength)
+            self.trimedCo = trimedCo
+            return (extendCo, extendCoLength)
 
 
     def calculateTarget(self, sourceLength, targetsLength, tolerance):
@@ -1232,7 +1549,7 @@ class generateCladding:
                 nums = list(remaining_nums.elements())
                 random.shuffle(nums)
 
-
+                random.shuffle(combination)
                 all_combinations.append(combination)
 
             return all_combinations
@@ -1240,7 +1557,13 @@ class generateCladding:
         targetsLengthflatten = [int(math.ceil(t)) for t in list(chain.from_iterable(targetsLength))]
         sourceLength = [int(s) for s in sourceLength]
         random.shuffle(sourceLength)
-        combinations = find_combinations(sourceLength, targetsLengthflatten)
+
+        pair = [(t_id, t) for t_id, t in enumerate(targetsLengthflatten)]
+        pair.sort(key=lambda pair: pair[1])
+        id_sort = [p[0] for p in pair]
+        targetsLengthflattenSorted = [p[1] for p in pair]
+        combinations = find_combinations(sourceLength, targetsLengthflattenSorted)
+        combinations = [originComb for _, originComb in sorted(zip(id_sort, combinations))]
 
         for target, combination in zip(targetsLengthflatten, combinations):
             print("Target "+ str(target) + " constructed by: "+ str(combination) + " ,the sum is: " + str(sum(combination)))
@@ -1394,8 +1717,6 @@ def initialize_globals():
     global initial_data
     initial_data = initial_data if 'initial_data' in globals() else {}
 
-
-
 def offset_brep(brep, distances, tolerance=0.01):
     all_offset_breps = []
     for distance in distances:
@@ -1407,6 +1728,15 @@ def offset_brep(brep, distances, tolerance=0.01):
             all_offset_breps.append(None)
     return all_offset_breps
 
+def changePath(dataModified, dataSource):
+    pathList = dataSource.Paths
+
+    layerTree = DataTree[object]()
+    dataList = dataModified.Branches
+
+    for data, path in zip(dataList, pathList):
+        layerTree.AddRange(data, path)
+    return layerTree
 
 
 compoundMaterialObj = CompoundMaterial(material_collection)
@@ -1429,23 +1759,60 @@ if init:
 else:
     initialize_globals()
 
-    test = generateCladding(windowData, doorData, claddingData, wallGeo, windowGeo, doorGeo, claddingWidth, claddingLength, kindNum, wWeight, lWeight, horiOverlap, vertiOverlap, horiAngle, vertiAngle, substructWidth, substructThickness, offsetCladdingDist)
-
-    comb = test.combinationGraph
-    originalCoTileGeo = test.originalCoTileGeo
-    substructureGeo = test.substructureGeo
-    wallForInnerMaterial = test.wallForInnerGeo
-    windowForFinalList = test.windowForFinalList
-    doorForFinalList = test.doorForFinalList
-    orientedDoorGeoList = test.orientedDoorGeoList
-    originalCo = test.originalCo
-    compensatedCombineGeo = test.compensatedCombineGeo
-    trimedCo = test.trimedCo
+    db_dict = DB.all_DB
+    windowData = db_dict["windowDB"]
+    doorData = db_dict["doorDB"]
+    claddingData = db_dict["tileDB"]
 
 
+    if customizeTile:
+        test = generateCladding(windowDB=windowData, doorDB=doorData, claddingDB=claddingData, wallGeo=wallGeo, windowGeo=windowGeo, doorGeo=doorGeo, horizontalOverlap=horiOverlap, verticalOverlap=vertiOverlap, horizontalAngle=horiAngle, verticalAngle=vertiAngle, substructWidth=substructWidth, substructThickness=substructThickness, offsetDist=offsetCladdingDist, tileDimension = customizeTile)
+        
+    else:
+        tileSetting = searchTile.searchTileData
+        claddingWidth = tileSetting["claddingWidth"]
+        claddingLength = tileSetting["claddingLength"]
+        kindNum = tileSetting["kindNum"]
+        wWeight = tileSetting["wWeight"]
+        lWeight = tileSetting["lWeight"]
 
+        claddingObj = generateCladding(windowDB=windowData, doorDB=doorData, claddingDB=claddingData, wallGeo=wallGeo, windowGeo=windowGeo, doorGeo=doorGeo, claddingWidth=claddingWidth, claddingLength=claddingLength, kindNum=kindNum, wWeight=wWeight, lWeight=lWeight, horizontalOverlap=horiOverlap, verticalOverlap=vertiOverlap, horizontalAngle=horiAngle, verticalAngle=vertiAngle, substructWidth=substructWidth, substructThickness=substructThickness, offsetDist=offsetCladdingDist)
+
+
+    Co = claddingObj.Co
+    CoGraft = claddingObj.CoGraft
+    checkCutting = claddingObj.checkCutting
+    targetLines = claddingObj.targetLines
+    # Output claddingObj
+    wallFrame = claddingObj.wallFrame
+    comb = th.list_to_tree(claddingObj.combinationGraph)
+    originalCoTileGeo = th.list_to_tree(claddingObj.originalCoTileGeo)
+    substructureGeo = claddingObj.substructureGeo
+    wallForInnerMaterial = claddingObj.wallForInnerGeo
+    windowForFinalList = claddingObj.windowForFinalList
+    doorForFinalList = claddingObj.doorForFinalList
+    orientedDoorGeoList = claddingObj.orientedDoorGeoList
+    originalCo = claddingObj.originalCo
+    compensatedCombineGeo = claddingObj.compensatedCombineGeo
+    compensatedOpeningGeoNext = claddingObj.compensatedOpeningGeoNext
+    trimedCo = claddingObj.trimedCo
+
+    # Calculate innerMaterial Part
     offsetted_surface = offset_brep(wallForInnerMaterial, offsetList)
 
-    wallObj = wallGenerate(offsetted_surface, materialList, material_thickness)
+    wallObj = innerMaterialGenerate(offsetted_surface, materialList, material_thickness, moduleDistance, wallFrame)
     allTypeMaterial = wallObj.allTypeMaterial
-    check = wallObj.check
+    checkGeo = wallObj.checkGeo
+    allTypeMaterialModule = wallObj.allTypeMaterialModule
+
+    for key in wallObj.materialInfoDict:
+        print(key)
+        print(wallObj.materialInfoDict[key])
+
+    
+    data = th.list_to_tree(allTypeMaterialModule.Branches)
+    allTypeMaterialModule = changePath(data, allTypeMaterialModule)
+
+    
+
+
