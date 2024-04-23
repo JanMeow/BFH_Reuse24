@@ -9,10 +9,12 @@ import System.Array as array
 from itertools import chain
 import random
 from collections import Counter
+import math
 
 import sys
 import os
 
+random.seed(10)
 dbList = ["bauteil_obergruppe", "bauteil_gruner", "uuid", "kosten", "zustand", "material", "ref_gebauede_geschoss", "breite", "hoehe", "tiefe", "flaeche", "masse", "anzahl", "foto1", "foto2", "co2", "url"]
 
 class GenerateCladding:
@@ -92,15 +94,17 @@ class GenerateCladding:
         sorted_list = sorted(paired_list, key=lambda x: x[1])
         self.minTileWidth = sorted_list[0][1]
         self.minTileLength = sorted_list[0][0]
-        self.gridDist = self.minTileWidth - self.horizontalOverlap
+        # self.gridDist = self.minTileWidth - self.horizontalOverlap
         #print(self.minTileWidth)
         #print(self.minTileLength)
 
         self.claddingGeo = self.offset_brep(self.wallGeo, [self.offsetDist], self.wallGeo.Faces[0].FrameAt(0.5, 0.5)[1])[0]
 
         # Generate the column line, wall frame, and cut direction for the cladding
-        self.columnLine, self.wallFrame, self.cutDirect = self.generateTileColumn(self.claddingGeo, self.gridDist)
+        self.columnLine, self.wallFrame, self.cutDirect = self.generateTileColumn(self.claddingGeo, self.minTileWidth, self.horizontalOverlap)
 
+
+        """
         # Get window indices and geometries from DB that match users' dimension of geometry for window.
         if len(self.windowGeo)!=0 and isinstance(self.windowGeo[0], rg.Brep):
             chosenWindowId, self.chosenWindowGeo, self.chosenWindowAttr = self.findWindow(self.windowDB, self.windowGeo, self.gridDist, self.horizontalOverlap)
@@ -115,6 +119,29 @@ class GenerateCladding:
         # Orient window and door onto grid system
         self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
         self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
+        """
+
+
+        if len(self.windowGeo)!=0 and isinstance(self.windowGeo[0], rg.Brep):
+            # Get window indices and geometries from DB that match users' dimension of geometry for window.
+            chosenWindowId, self.chosenWindowGeo, self.chosenWindowAttr = self.findWindow(self.windowDB, self.windowGeo, self.gridDist, self.horizontalOverlap)
+            # Orient window and door onto grid system
+            self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
+        else:
+            self.chosenWindowGeo, self.chosenWindowAttr = self.buildWindow(self.windowGeo)
+            # Orient window and door onto grid system
+            self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
+
+        if len(self.doorGeo)!=0 and isinstance(self.doorGeo[0], rg.Brep):
+            # Get window indices and geometries from DB that match users' dimension of geometry for window.
+            chosenDoorId, self.chosenDoorGeo, self.chosenDoorAttr = self.findDoor(self.doorDB, self.doorGeo, self.gridDist, self.horizontalOverlap)
+            # Orient window and door onto grid system
+            self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
+        else:
+            self.chosenDoorGeo, self.chosenDoorAttr = self.buildDoor(self.doorGeo)
+            # Orient window and door onto grid system
+            self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
+
 
         self.midCurve = self.getMidCurve(self.columnLine)
 
@@ -489,6 +516,28 @@ class GenerateCladding:
         return (chosenId, chosenDoorGeo, chosenDoorAttr)
 
 
+    def buildWindow(self, geoList):
+        windowGeoList = []
+        windowAttrList = []
+        for geo in geoList:
+            windowGeoList.append(rg.Rectangle3d(rg.Plane.WorldXY, float(geo.breite), float(geo.hoehe)))
+
+            windowAttrList.append(geo.attr)
+        
+        return (windowGeoList, windowAttrList)
+
+
+    def buildDoor(self, geoList):
+        doorGeoList = []
+        doorAttrList = []
+        for geo in geoList:
+            doorGeoList.append(rg.Rectangle3d(rg.Plane.WorldXY, float(geo.breite), float(geo.hoehe)))
+
+            doorAttrList.append(geo.attr)
+
+        return (doorGeoList, doorAttrList)
+
+
     def findCladding(self, claddingDB, searchWidth, searchLength, kindNum, wWeight, lWeight):
         widthDB = []
         lengthDB = []
@@ -540,6 +589,19 @@ class GenerateCladding:
         return (id, width, length, quantity, longList, attrList)
 
 
+    def calculateGridDist(self, wallGeo, base_point, direct, overlapDist, minTileWidth):
+        base_plane = rg.Plane(base_point, direct)
+        bbox = wallGeo.GetBoundingBox(base_plane)
+
+        # Start and end values for contouring in the direction of the plane's normal
+        domain = abs(bbox.Max.Z - bbox.Min.Z)
+        rowNum = math.floor(domain/(minTileWidth - overlapDist))
+        # remain = domain%(minTileWidth - overlapDist)
+        gridDist = domain / (rowNum + 1) - 0.1
+        
+        return gridDist
+
+
     def _create_contours(self, surface, base_point, direct, interval):
         if isinstance(surface, rg.BrepFace):
             print("This is surface not brep")
@@ -573,7 +635,8 @@ class GenerateCladding:
         return contours
 
 
-    def generateTileColumn(self, wallGeo, gridDist):
+    def generateTileColumn(self, wallGeo, minTileWidth, horizontalOverlap):
+        gridDist = minTileWidth - horizontalOverlap
         colBasePt = wallGeo.Vertices[0].Location
         self.seePt = colBasePt
         # if isinstance(wallGeo, rg.Brep):
@@ -595,18 +658,6 @@ class GenerateCladding:
         else:
             print("Failed to compute area properties.")
         
-        # # Align wallFrame's YAxis to global ZAxis
-        # global_z_axis = rg.Vector3d.ZAxis
-        # angle = rg.Vector3d.VectorAngle(wallGeo_Frame.YAxis, global_z_axis)
-        
-        # # Determine the direction of rotation (clockwise or counter-clockwise)
-        # cross_product = rg.Vector3d.CrossProduct(wallGeo_Frame.YAxis, global_z_axis)
-        # if cross_product * wallGeo_Frame.ZAxis < 0:  # If cross product is in opposite direction to frame's Z-axis
-        #     angle = -angle
-        
-        # # Rotate the frame around its Z-axis
-        # wallGeo_Frame.Rotate(angle, wallGeo_Frame.ZAxis, wallGeo_Frame.Origin)
-        
         wallGeo_Frame = self.alignToZ(wallGeo_Frame)
         
         
@@ -618,12 +669,12 @@ class GenerateCladding:
                 cutDirect = AlignPlane(wallGeo_Frame, rg.Vector3d.ZAxis)[0].XAxis
 
 
-            # if self.claddingDirection:
-            #     cutDirect = -AlignPlane(wallGeo_Frame, rg.Vector3d.ZAxis)[0].YAxis
-            # else:
-            #     cutDirect = -AlignPlane(wallGeo_Frame, rg.Vector3d.ZAxis)[0].XAxis
+            self.gridDist = self.calculateGridDist(wallGeo, colBasePt, cutDirect, horizontalOverlap, minTileWidth)
 
-            columnLine = self._create_contours(wallGeo, colBasePt, cutDirect, gridDist)
+            
+
+            columnLine = self._create_contours(wallGeo, colBasePt, cutDirect, self.gridDist)
+
             return (columnLine, wallGeo_Frame, cutDirect)
         else:
             print("Failed to contour.")
@@ -657,6 +708,8 @@ class GenerateCladding:
         for windowGeo, chosenGeo in zip(userWindowGeo, chosenWindowGeo):
             if isinstance(windowGeo, rg.Brep):
                 windowGeo = windowGeo.Faces[0]
+            else:
+                windowGeo = windowGeo.geo.Faces[0]
             
             if isinstance(wallGeo, rg.Brep):
                 wallGeo = wallGeo.Faces[0]
@@ -787,6 +840,8 @@ class GenerateCladding:
         for doorGeo, chosenGeo in zip(userDoorGeo, chosenDoorGeo):
             if isinstance(doorGeo, rg.Brep):
                 doorGeo = doorGeo.Faces[0]
+            else:
+                doorGeo = doorGeo.geo.Faces[0]
             
             if isinstance(wallGeo, rg.Brep):
                 wallGeo = wallGeo.Faces[0]
@@ -1380,12 +1435,25 @@ class GenerateCladding:
             sweep.ClosedSweep = True
             sweep.SweepTolerance = 0.01
 
-            # Perform the sweep
-            swept_breps = sweep.PerformSweep(curve, rectangle.ToNurbsCurve())
+            # Explode the rectangle into segments
+            seg_rect = rectangle.ToNurbsCurve().DuplicateSegments()
+            brep_list = []
 
-            # Assuming we want the first Brep if there are multiple
-            if swept_breps.Length != 0:
-                return swept_breps[0]
+            # Perform a sweep for each segment
+            for seg in seg_rect:
+                swept_breps = sweep.PerformSweep(curve, seg)
+                if swept_breps:  # Check if sweep was successful
+                    brep_list.append(swept_breps[0])
+
+            # Join all swept BReps into one BRep if there are multiple parts
+            if brep_list:
+                beam_geo = rg.Brep.JoinBreps(brep_list, 0.01)
+                if beam_geo:
+                    return beam_geo[0]  # Assuming join was successful and returns at least one BRep
+                else:
+                    return None
+            else:
+                return None
         
         beamGeoList = []
         for crv in curveForSubstructure:

@@ -1,3 +1,5 @@
+import uuid
+
 class Paint:
     def __init__(self, thickness, attrList):
         self.materialType = "paint"
@@ -14,7 +16,7 @@ if objAttr == None:
     attr_dict = {
     'bauteil_obergruppe': 'unknown',
     'bauteil_gruner': 'unknown',
-    'uuid': 'unknown',
+    'uuid': 'paint_uuid_' + str(uuid.uuid4()),
     'kosten': 'unknown',
     'zustand': 'unknown',
     'material': 'unknown',

@@ -14,7 +14,7 @@ class CompoundMaterial:
         update_materialList = []
         for mat in materialList:
             if mat.materialType == "board" and mat.searchDB:
-                useWidth, useLength, useDepth, useQuantity, useId, useObjAttr = self.find_board(self.boardDB, mat.width, mat.length, mat.thickness)
+                useWidth, useLength, useDepth, useQuantity, useId, useObjAttr = self.find_board(self.boardDB, mat.length, mat.width, mat.thickness)
                 mat.width = useWidth
                 mat.length = useLength
                 mat.thickness = useDepth
@@ -22,7 +22,7 @@ class CompoundMaterial:
                 update_materialList.append(mat)
             else:
                 update_materialList.append(mat)
-        
+            
         return update_materialList
 
 
@@ -64,6 +64,25 @@ class CompoundMaterial:
 
         euclideanDistList = []
         for w, l, d, q, id, obj in boardList:
+            temp = []
+            for check in [w,l,d]:
+                try:
+                    result = float(check)
+                except:
+                    result = 1
+                temp.append(result)
+            w,l,d = temp
+
+            temp = []
+            for check in [searchLength, searchWidth, searchDepth]:
+                try:
+                    result = float(check)
+                except:
+                    result = 1
+                temp.append(result)
+            searchLength, searchWidth, searchDepth = temp
+
+            
             euclideanDist = math.sqrt((searchWidth - w)**2 + (searchLength - l)**2 + (searchDepth - d)**2)
             euclideanDistList.append(euclideanDist)
 

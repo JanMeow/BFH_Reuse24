@@ -14,7 +14,7 @@ import sys
 import os
 
 class InnerMaterialGenerate:
-    def __init__(self, DB, surfaceList, materialList, thicknessList, moduleDistance=180, wallFrame=None, claddingDirection=None, moduleCurve=[], moduleCrvDist=10, ifModule=False):
+    def __init__(self, DB, surfaceList, materialList, thicknessList, moduleDistance=None, wallFrame=None, claddingDirection=None, moduleCurve=[], moduleCrvDist=10, ifModule=False):
         print("class of innerMaterialGenerate is running")
         self.boardDB = DB["boardDB"]
         self.surfaceList = surfaceList
@@ -54,8 +54,10 @@ class InnerMaterialGenerate:
                 if ifModule == True:
                     if len(self.moduleCurve) != 0:
                         srf_List = self.create_module_byCurve(entireSrf, workPlane, self.moduleCurve, self.moduleCrvDist)
-                    else:
+                    elif self.moduleDistance != None:
                         srf_List = self.create_module_withDistance(entireSrf, workPlane, self.moduleDistance)
+                    else:
+                        srf_List = [entireSrf]
                 else:
                     srf_List = [entireSrf]
 
@@ -70,10 +72,10 @@ class InnerMaterialGenerate:
                     allTypeGeoModule = []
                     if matType == "board":
                         # if mat.searchDB:
-                        #     useWidth, useLength, useDepth, useQuantity, useId, useMatAttr = self.find_board(self.boardDB, mat.length, mat.width, mat.thickness)
-                        #     print("==============")
-                        #     print(useDepth)
+                        #     useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.DBwidth, mat.DBlength, mat.DBthickness, mat.attrList, mat.direction, mat.pt
                         # else:
+                        #     useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.width, mat.length, mat.thickness, mat.attrList, mat.direction, mat.pt
+                        
                         useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.width, mat.length, mat.thickness, mat.attrList, mat.direction, mat.pt
 
                         # print(useMatAttr.uuid)
@@ -158,10 +160,13 @@ class InnerMaterialGenerate:
         if self.claddingDirection:
             base_plane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
         curves, _ = self.create_contours(surface, base_plane, distance)
-        surfaceList = SurfaceSplit(surface, curves)
-        surfaceList = self.sortSurface(surfaceList, base_plane)
 
-        return surfaceList
+        chosenSrf = self.create_module_byCurve(surface, base_plane, curves, self.moduleCrvDist)
+
+        # surfaceList = SurfaceSplit(surface, curves)
+        # surfaceList = self.sortSurface(surfaceList, base_plane)
+
+        return chosenSrf
 
 
     def sortSurface(self, srfList, sortPlane):
@@ -178,7 +183,8 @@ class InnerMaterialGenerate:
 
 
     def create_contours(self, surface, base_plane, interval, pt=None):
-        base_plane = copy(base_plane)
+        interval = float(interval)
+        base_plane = deepcopy(base_plane)
         base_plane.Rotate(math.pi/2, base_plane.XAxis, base_plane.Origin)
         base_plane.Rotate(math.pi/10, base_plane.ZAxis, base_plane.Origin) # Maybe this line can be removed
 
@@ -198,6 +204,7 @@ class InnerMaterialGenerate:
         if pt == None:
             offsetDist = 0
         else:
+            # print(interval)
             offsetDist = originPlane.DistanceTo(pt)%interval
         
 
@@ -221,13 +228,12 @@ class InnerMaterialGenerate:
 
         return (contours, int(total_length))
 
-
     def create_beam(self, curve, base_plane, width, height):
         start_point = curve.PointAtStart
 
         # Create a plane at the start point with the same orientation as the provided plane
         section_plane = rg.Plane(start_point, base_plane.YAxis, base_plane.ZAxis)
-        matrix = rg.Transform.Translation(-base_plane.YAxis*width/2)
+        matrix = rg.Transform.Translation(-base_plane.YAxis * width / 2)
         section_plane.Transform(matrix)
 
         # Create a rectangle in this plane
@@ -239,12 +245,26 @@ class InnerMaterialGenerate:
         sweep.ClosedSweep = True
         sweep.SweepTolerance = 0.01
 
-        # Perform the sweep
-        swept_breps = sweep.PerformSweep(curve, rectangle.ToNurbsCurve())
+        # Explode the rectangle into segments
+        seg_rect = rectangle.ToNurbsCurve().DuplicateSegments()
+        brep_list = []
 
-        # Assuming we want the first Brep if there are multiple
-        return swept_breps[0]
-        
+        # Perform a sweep for each segment
+        for seg in seg_rect:
+            swept_breps = sweep.PerformSweep(curve, seg)
+            if swept_breps:  # Check if sweep was successful
+                brep_list.append(swept_breps[0])
+
+        # Join all swept BReps into one BRep if there are multiple parts
+        if brep_list:
+            beam_geo = rg.Brep.JoinBreps(brep_list, 0.01)
+            if beam_geo:
+                return beam_geo[0]  # Assuming join was successful and returns at least one BRep
+            else:
+                return None
+        else:
+            return None
+      
 
     def create_board(self, surface, base_plane, length, width, thickness, direction, matAttr, oriPt):
         if direction:

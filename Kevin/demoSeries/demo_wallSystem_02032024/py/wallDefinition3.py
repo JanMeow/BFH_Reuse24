@@ -137,7 +137,7 @@ if len(setTile) == 0:
     ghenv.Component.AddRuntimeMessage(ghkernel.GH_RuntimeMessageLevel.Warning, "setTile is empty.")
     goExecute = False
 # ==============================================================================
-input_collection = {"setTile":None, "claddingDirection":True, "horiOverlap":1, "vertiOverlap":0, "horiAngle":0.5, "vertiAngle":0, "substructWidth":4, "substructThickness":2, "moduleDistance":180, "moduleCurve":None, "moduleCrvDist":10, "init":False}
+input_collection = {"setTile":None, "claddingDirection":True, "horiOverlap":1, "vertiOverlap":0, "horiAngle":0.5, "vertiAngle":0, "substructWidth":4, "substructThickness":2, "moduleDistance":None, "moduleCurve":None, "moduleCrvDist":10, "init":False}
 
 for name in input_collection:
     if name not in globals() or globals()[name]== None:

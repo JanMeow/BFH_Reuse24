@@ -1,3 +1,5 @@
+import uuid
+
 class MakeTile:
     def __init__(self, width, height, quantity, attrList):
         self.width = width
@@ -15,7 +17,7 @@ if objAttr == None:
     attr_dict = {
     'bauteil_obergruppe': 'unknown',
     'bauteil_gruner': 'unknown',
-    'uuid': 'unknown',
+    'uuid': 'tile_uuid_' + str(uuid.uuid4()),
     'kosten': 'unknown',
     'zustand': 'unknown',
     'material': 'unknown',
@@ -30,6 +32,14 @@ if objAttr == None:
     'foto2': 'unknown',
     'co2': 'unknown',
     'url': 'unknown'}
+
+    if width != None:
+        attr_dict['breite'] = width
+    if height != None:
+        attr_dict['hoehe'] = height
+    if quantity != None:
+        attr_dict['anzahl'] = int(quantity)
+
     newObj = ObjFromRH(**attr_dict)
     newObj.attrDict = attr_dict
     attrList = newObj

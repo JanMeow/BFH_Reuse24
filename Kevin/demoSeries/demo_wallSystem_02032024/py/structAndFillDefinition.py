@@ -1,3 +1,5 @@
+import uuid
+
 class SubstructInfill:
     def __init__(self, width, thickness, distance, direction, searchDB, attrList):
         self.materialType = "substructInfill"
@@ -18,7 +20,7 @@ if objAttr == None:
     attr_dict = {
     'bauteil_obergruppe': 'unknown',
     'bauteil_gruner': 'unknown',
-    'uuid': 'unknown',
+    'uuid': 'structAndFill_uuid_' + str(uuid.uuid4()),
     'kosten': 'unknown',
     'zustand': 'unknown',
     'material': 'unknown',
