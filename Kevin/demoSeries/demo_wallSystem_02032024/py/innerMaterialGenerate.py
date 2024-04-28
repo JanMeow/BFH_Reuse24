@@ -182,6 +182,7 @@ class InnerMaterialGenerate:
             return sortedSurfaces
 
 
+    @classmethod
     def create_contours(self, surface, base_plane, interval, pt=None):
         interval = float(interval)
         base_plane = deepcopy(base_plane)

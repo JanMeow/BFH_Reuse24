@@ -147,33 +147,6 @@ if len(material_collection) == 0:
     ghenv.Component.AddRuntimeMessage(ghkernel.GH_RuntimeMessageLevel.Warning, "inner material is empty.")
     goExecute = False
 
-# if claddingDirection == None:
-#     claddingDirection = True
-# if horiOverlap == None:
-#     horiOverlap = 1
-# if vertiOverlap == None:
-#     vertiOverlap = 0
-# if horiAngle == None:
-#     horiAngle = 5
-# if vertiAngle == None:
-#     vertiAngle = 0
-# # ==============================================================================
-# if substructWidth == None:
-#     substructWidth = 40
-# if substructThickness == None:
-#     substructThickness = 20
-# if len(material_collection) == 0:
-#     ghenv.Component.AddRuntimeMessage(ghkernel.GH_RuntimeMessageLevel.Warning, "inner material is empty.")
-#     goExecute = False
-# if moduleDistance == None:
-#     moduleDistance = 1800
-# if len(moduleCurve) == 0:
-#     moduleCurve = []
-# if moduleCrvDist == None:
-#     moduleCrvDist = 100
-# if init == None:
-#     init = False
-
 
 if goExecute:
     if init:
@@ -199,7 +172,6 @@ if goExecute:
         offsetList.insert(0,0)
 
 
-
         if setTile[0].identity == "customizedTile":
             print("Go into customizeTile")
             claddingObj = GenerateCladding(DB = inputDB, wallGeo=carrierGeoFlat, windowGeo=windowGeo, doorGeo=doorGeo, claddingDirection = claddingDirection, horizontalOverlap=horiOverlap, verticalOverlap=vertiOverlap, horizontalAngle=horiAngle, verticalAngle=vertiAngle, substructWidth=substructWidth, substructThickness=substructThickness, offsetDist=offsetCladdingDist, tileDimension = setTile)
@@ -219,20 +191,22 @@ if goExecute:
             print("Go into Board Facade Process")
             claddingObj = NormalFacade(DB=inputDB, wallGeo=carrierGeoFlat, windowGeo=windowGeo, doorGeo=doorGeo, claddingDirection = claddingDirection, offsetDist=offsetCladdingDist, claddingMaterial=setTile)
             facadeMaterial = claddingObj.facadeMaterial
+            offsetCladdingDist += claddingObj.normalOffsetDist
 
+            ruler = claddingObj.ruler
 
 
         if setTile[0].identity == "customizedTile" or setTile[0].identity == "searchTile":
             facadeType = 'tile'
             # Output claddingObj
             comb = th.list_to_tree(claddingObj.combinationGraph)
-            originalCoTileGeo = th.list_to_tree(claddingObj.originalCoTileGeo)
+            tileGeometry = th.list_to_tree(claddingObj.originalCoTileGeo)
             substructureGeo = claddingObj.substructureGeo #
             claddingInfo = claddingObj.tileAttrDict
         else:
             facadeType = 'normal'
             comb = None
-            originalCoTileGeo = facadeMaterial
+            tileGeometry = facadeMaterial
             substructureGeo = None
             claddingInfo = claddingObj.claddingInfo
         
@@ -242,7 +216,6 @@ if goExecute:
         windowForFinalList = claddingObj.windowForFinalList 
         doorForFinalList = claddingObj.doorForFinalList 
         openingInfo = claddingObj.chosenDoorAttr
-
 
 
         # Calculate innerMaterial Part
@@ -279,10 +252,13 @@ if goExecute:
         
         visualObj = visualClass()
         visualObj.comb = comb
-        visualObj.originalCoTileGeo = originalCoTileGeo
+        visualObj.tileGeometry = tileGeometry
         visualObj.allTypeMaterial = allTypeMaterial
         visualObj.substructureGeo = substructureGeo
         visualObj.wallFrame = wallFrame
+        visualObj.offsetCladdingDist = offsetCladdingDist
+        visualObj.windowGeo = windowForFinalList
+        visualObj.doorGeo = doorForFinalList
 
         
         data = th.list_to_tree(allTypeMaterialModule.Branches)

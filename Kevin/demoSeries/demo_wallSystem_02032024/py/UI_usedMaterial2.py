@@ -1,8 +1,26 @@
 import Rhino
+import Rhino.Geometry as rg
 import Eto.Forms as forms
 import Eto.Drawing as drawing
 import webbrowser
 import scriptcontext as sc
+
+# Imports from
+from Rhino.UI import *
+from Eto.Forms import *
+from Eto.Drawing import *
+
+# Imports
+import Rhino.UI
+import Eto
+import System
+
+from Rhino import RhinoDoc, Display
+from System.Drawing import Bitmap, Graphics, Rectangle, Size
+from System.Drawing.Imaging import ImageFormat
+import System.IO
+
+
 
 if winHeight is None:
     winHeight = 800
@@ -14,74 +32,125 @@ def create_label_with_font(text, font_size, font_family="Arial"):
     label.Font = drawing.Font(font_family, font_size)
     return label
 
+## Original One
 def create_white_image(width, height):
     """Create a white bitmap image of specified width and height."""
     white_image = drawing.Bitmap(width, height, drawing.PixelFormat.Format32bppRgb)
+    text = "     _(:3 」∠ )_\n Image not found"
     with drawing.Graphics(white_image) as g:
-        g.Clear(drawing.Colors.White)  # Fill the image with white color
+        g.Clear(drawing.Colors.Gray)  # Fill the image with white color
+        font = drawing.Font("Arial", 12)  # You can adjust the font and size
+        text_brush = drawing.SolidBrush(drawing.Colors.White)
+        text_size = g.MeasureString(font, text)
+        text_location = drawing.PointF((width - text_size.Width) / 2, (height - text_size.Height) / 2)
+        g.DrawText(font, text_brush, text_location, text)
+
+
+
     return white_image
 
-# Assume 'selectedIndices' is a global list defined outside this class 
-# to store the indices of selected items. This is a simplification for demonstration.
+"""countNum = 0
+showGeo = []
+def create_white_image2(width, height):
+    global countNum
+    countNum += 1
+    geo = missGeo[countNum%len(missGeo)]
+    bbox = geo.GetBoundingBox(True)
+    
+    # Get the active Rhino document
+    doc = RhinoDoc.ActiveDoc
+    view = doc.Views.ActiveView
+    viewport = view.ActiveViewport
 
-selectedIndices = []  # This will be used to store the indices of selected items.
-selectedBool = []
+    oriCamSet = {}
+    oriCamSet['CameraTarget'] = viewport.CameraTarget
+    oriCamSet['CameraLocation'] = viewport.CameraLocation
+    
+    # Set the camera parameters
+    # camera_location = Rhino.Geometry.Point3d(1000, 1000, 1000)
+    # target_point = Rhino.Geometry.Point3d(0, 0, 0)
+    # viewport.Camera35mmLensLength = 50
+    # viewport.SetCameraLocations(target_point, camera_location)
+    
+    # Redraw the view to update the viewport
+    viewport.ZoomBoundingBox(bbox)
+    view.Redraw()
+
+    # Capture the current view to a bitmap
+    captured_bitmap = view.CaptureToBitmap()
+
+    # Resize the captured image to the desired dimensions using System.Drawing
+    resized_image = Bitmap(width, height)
+    with Graphics.FromImage(resized_image) as g:
+        rect = Rectangle(0, 0, width, height)
+        g.DrawImage(captured_bitmap, rect)
+
+    # Convert System.Drawing.Bitmap to Eto.Drawing.Bitmap
+    eto_stream = System.IO.MemoryStream()
+    resized_image.Save(eto_stream, ImageFormat.Png)
+    eto_stream.Position = 0  # Reset stream position after saving
+    eto_bitmap = drawing.Bitmap(eto_stream)
+
+    # Cleanup
+    eto_stream.Dispose()
+    captured_bitmap.Dispose()
+    resized_image.Dispose()
+
+
+    viewport.SetCameraLocations(oriCamSet['CameraTarget'], oriCamSet['CameraLocation'])
+    # Redraw the view to update the viewport
+    view.Redraw()
+
+    return eto_bitmap
+"""
+
+imgWidth = 250
 
 class innerMaterialWindow(forms.Form):  # Use Dialog[bool] for a modal dialog
     def __init__(self):
         super(innerMaterialWindow, self).__init__()
         self.Title = "Image Viewer"
-        
-        self.Location = drawing.Point(100, 100)
-
-
-        self.checkBoxes = []
 
         self.layout = forms.DynamicLayout()
         self.layout.Height = winHeight
 
         self.scrollable = forms.Scrollable()
         self.imageLayout = forms.DynamicLayout()
-        self.imageLayout.Padding = drawing.Padding(0, 10, 10, 60)
+        self.imageLayout.Padding = drawing.Padding(10, 10, 20, 30)
         self.scrollable.Content = self.imageLayout
         self.layout.AddRow(self.scrollable)
-
         self.Content = self.layout
 
-        self.imagePaths = imagePaths
-        self.urlList = urlList
-        self.dataList = dataList
-        self.usedDataList = usedDataList
-        self.populate_images()
+        self.populate_images(imagePaths, dataList, urlList, usedDataList)
 
-    def populate_images(self):
+    def populate_images(self, imagePaths, dataList, urlList, usedDataList):
         images_per_row = rowNum
         row = []
         count = 0
         
-        for path, data, urrl, usedData in zip(self.imagePaths, self.dataList, self.urlList, self.usedDataList):
+        for path, data, urrl, usedData in zip(imagePaths, dataList, urlList, usedDataList):
 
             try:
                 unitLayout = forms.StackLayout()
                 unitLayout.Orientation = forms.Orientation.Vertical
-                unitLayout.Spacing = 5
-                unitLayout.Padding = drawing.Padding(10)
+                unitLayout.Spacing = 1
+                unitLayout.Padding = drawing.Padding(10, 0, 10, 15)
     
                 imageView = forms.ImageView()
-                imageView.Size = drawing.Size(250, 250)  # Fixed size for the image
+                imageView.Size = drawing.Size(imgWidth, 200)  # Fixed size for the image
                 
                 try:
                     image = drawing.Bitmap(path)
                 except Exception as e:
                     print("Failed to load image")
-                    image = create_white_image(250, 190)  # Fallback to a white image
+                    image = create_white_image(imgWidth, 192)  # Fallback to a white image
 
                 imageView.Image = image
 
                 ############################################################
                 # Create a horizontal StackLayout for descriptions
                 descriptionsLayout = forms.StackLayout()
-                descriptionsLayout.Spacing = 3
+                descriptionsLayout.Spacing = 1
                 
                 descriptions = data
                 
@@ -130,21 +199,12 @@ class innerMaterialWindow(forms.Form):  # Use Dialog[bool] for a modal dialog
                 checkBoxLabelLayout.Orientation = forms.Orientation.Horizontal
                 checkBoxLabelLayout.Spacing = 5
                 
-                checkBox = forms.CheckBox() 
-                checkBox.CheckedChanged += self.on_checked_changed
-                self.checkBoxes.append(checkBox)
-                
-                checkBoxLabel = forms.Label(Text="Show in Rhino")  # Custom font label
-                checkBoxLabel.Font = drawing.Font("Arial Bold", 13)  # Set the font here
-                
-                checkBoxLabelLayout.Items.Add(checkBox)
-                checkBoxLabelLayout.Items.Add(checkBoxLabel)
-                
                 
                 # Add the imageView, descriptionScrollable, and checkBox to the unitLayout
                 unitLayout.Items.Add(imageView)
                 unitLayout.Items.Add(usedMaterialInfoScrollable)
-                unitLayout.Items.Add(descriptionScrollable)  # Add the scrollable descriptions
+                if showDes:
+                    unitLayout.Items.Add(descriptionScrollable)  # Add the scrollable descriptions
                 unitLayout.Items.Add(link_button)
                 # unitLayout.Items.Add(checkBoxLabelLayout)
     
@@ -162,157 +222,13 @@ class innerMaterialWindow(forms.Form):  # Use Dialog[bool] for a modal dialog
         if row:
             self.imageLayout.AddRow(*row)
     
-    def on_checked_changed(self, sender, e):
-        # Update the stored state when a checkbox is changed
-        states = [checkBox.Checked for checkBox in self.checkBoxes]
-        sc.sticky['checkbox_states'] = states
+    def update(self, imagePaths, dataList, urlList, usedDataList):
+    # Clear existing content from the image layout and repopulate it
+        self.imageLayout.Clear()  # Clear existing items from the layout
+        self.populate_images(imagePaths, dataList, urlList, usedDataList)
+        self.scrollable.Content = None  # Detach the old layout
+        self.scrollable.Content = self.imageLayout  # Attach the updated layout
 
-
-class openingWindow(forms.Form):  # Use Dialog[bool] for a modal dialog
-    def __init__(self):
-        super(openingWindow, self).__init__()
-        self.Title = "Image Viewer"
-        
-        self.Location = drawing.Point(100, 100)
-
-
-        self.checkBoxes = []
-
-        self.layout = forms.DynamicLayout()
-        self.layout.Height = winHeight
-
-        self.scrollable = forms.Scrollable()
-        self.imageLayout = forms.DynamicLayout()
-        self.imageLayout.Padding = drawing.Padding(0, 10, 10, 60)
-        self.scrollable.Content = self.imageLayout
-        self.layout.AddRow(self.scrollable)
-
-        self.Content = self.layout
-
-        self.imagePaths = imagePaths
-        self.urlList = urlList
-        self.dataList = dataList
-        self.usedDataList = usedDataList
-        self.populate_images()
-
-    def populate_images(self):
-        images_per_row = rowNum
-        row = []
-        count = 0
-        
-        for path, data, urrl, usedData in zip(self.imagePaths, self.dataList, self.urlList, self.usedDataList):
-
-            try:
-                unitLayout = forms.StackLayout()
-                unitLayout.Orientation = forms.Orientation.Vertical
-                unitLayout.Spacing = 5
-                unitLayout.Padding = drawing.Padding(10)
-    
-                imageView = forms.ImageView()
-                imageView.Size = drawing.Size(250, 250)  # Fixed size for the image
-                
-                try:
-                    image = drawing.Bitmap(path)
-                except Exception as e:
-                    print("Failed to load image")
-                    image = create_white_image(250, 190)  # Fallback to a white image
-
-                imageView.Image = image
-
-                ############################################################
-                # Create a horizontal StackLayout for descriptions
-                descriptionsLayout = forms.StackLayout()
-                descriptionsLayout.Spacing = 3
-                
-                descriptions = data
-                
-                desired_font_size = 10
-                
-                for desc in descriptions:
-                    # Create and add labels with the desired font size to the layout.
-                    descriptionsLayout.Items.Add(create_label_with_font(desc, desired_font_size))
-                
-                # Encapsulate descriptionsLayout in a Scrollable for horizontal scrolling
-                descriptionScrollable = forms.Scrollable()
-                descriptionScrollable.Content = descriptionsLayout
-                
-                # Set the size of the Scrollable to match the imageView's size
-                # Here, the height is arbitrary since it's a horizontal scroll
-                descriptionScrollable.Width = imageView.Width
-
-                ############################################################
-                # Create a horizontal StackLayout for used material information
-                usedMaterialInfoLayout = forms.StackLayout()
-                usedMaterialInfoLayout.Spacing = 3
-                
-                usedMaterialInfo = usedData ######### Need to change
-                
-                desired_font_size = 10
-
-                print()
-                
-                if not isinstance(usedMaterialInfo, list):
-                    # for info in usedMaterialInfo:
-                    # Create and add labels with the desired font size to the layout.
-                    usedMaterialInfoLayout.Items.Add(create_label_with_font(usedMaterialInfo, desired_font_size))
-                else:
-                    for info in usedMaterialInfo:
-                        usedMaterialInfoLayout.Items.Add(create_label_with_font(info, desired_font_size))
-                
-                # Encapsulate descriptionsLayout in a Scrollable for horizontal scrolling
-                usedMaterialInfoScrollable = forms.Scrollable()
-                usedMaterialInfoScrollable.Content = usedMaterialInfoLayout
-                
-                # Set the size of the Scrollable to match the imageView's size
-                # Here, the height is arbitrary since it's a horizontal scroll
-                usedMaterialInfoScrollable.Width = imageView.Width
-
-                ############################################################
-                link_button = forms.LinkButton(Text="Open Website")
-                link_button.Click += lambda sender, e, url=urrl: webbrowser.open(url)
-                
-                
-                # Checkbox and Label Pair
-                checkBoxLabelLayout = forms.StackLayout()  # Horizontal layout for checkbox and label
-                checkBoxLabelLayout.Orientation = forms.Orientation.Horizontal
-                checkBoxLabelLayout.Spacing = 5
-                
-                checkBox = forms.CheckBox() 
-                checkBox.CheckedChanged += self.on_checked_changed
-                self.checkBoxes.append(checkBox)
-                
-                checkBoxLabel = forms.Label(Text="Show in Rhino")  # Custom font label
-                checkBoxLabel.Font = drawing.Font("Arial Bold", 13)  # Set the font here
-                
-                checkBoxLabelLayout.Items.Add(checkBox)
-                checkBoxLabelLayout.Items.Add(checkBoxLabel)
-                
-                
-                # Add the imageView, descriptionScrollable, and checkBox to the unitLayout
-                unitLayout.Items.Add(imageView)
-                unitLayout.Items.Add(usedMaterialInfoScrollable)
-                unitLayout.Items.Add(descriptionScrollable)  # Add the scrollable descriptions
-                unitLayout.Items.Add(link_button)
-                # unitLayout.Items.Add(checkBoxLabelLayout)
-    
-                row.append(unitLayout)
-    
-                count += 1
-                if count == images_per_row:
-                    self.imageLayout.AddRow(*row)
-                    row = []
-                    count = 0
-    
-            except Exception as e:
-                forms.MessageBox.Show("Failed to load image: " + str(e))
-    
-        if row:
-            self.imageLayout.AddRow(*row)
-    
-    def on_checked_changed(self, sender, e):
-        # Update the stored state when a checkbox is changed
-        states = [checkBox.Checked for checkBox in self.checkBoxes]
-        sc.sticky['checkbox_states'] = states
 
 
 showNum = 100
@@ -443,22 +359,6 @@ if showType == "innerMaterial":
         layer_useInfo = list(unzipped_layers[4])
 
 
-    imagePaths = layer_imgPath
-    urlList = layer_url
-    dataList = layer_description
-    usedDataList = layer_useInfo
-
-
-    def show_check_box_form():
-        form = innerMaterialWindow()
-        form.Show()
-
-    # A simple function to simulate a value listener that polls for checkbox state changes
-    def poll_checkbox_states():
-        # Default to all False if not set
-        return sc.sticky.get('checkbox_states', [False] * showNum)
-
-
 if showType == "opening":
     infoDict = {}
     for showDataOne in showData:
@@ -511,22 +411,6 @@ if showType == "opening":
         layer_url.append(infoDict[uuidKey]['layer_url'])
         layer_description.append(infoDict[uuidKey]['layer_description'])
         layer_useInfo.append(infoDict[uuidKey]['layer_useInfo'])
-
-
-    imagePaths = layer_imgPath
-    urlList = layer_url
-    dataList = layer_description
-    usedDataList = layer_useInfo
-
-
-    def show_check_box_form():
-        form = openingWindow()
-        form.Show()
-
-    # A simple function to simulate a value listener that polls for checkbox state changes
-    def poll_checkbox_states():
-        # Default to all False if not set
-        return sc.sticky.get('checkbox_states', [False] * showNum)
 
 
 if showType == "outerMaterial":
@@ -688,127 +572,35 @@ if showType == "outerMaterial":
     layer_useInfo = list(unzipped_layers[4])
 
 
-    imagePaths = layer_imgPath
-    urlList = layer_url
-    dataList = layer_description
-    usedDataList = layer_useInfo
+imagePaths = layer_imgPath
+urlList = layer_url
+dataList = layer_description
+usedDataList = layer_useInfo
 
 
+def RunScript():
+    # Ensure the form exists and is visible
+    if "my_form" in globals():
+        if my_form.Visible:
+            # Update the form with the current number input
+            my_form.update(imagePaths, dataList, urlList, usedDataList)
+        else:
+            print("not visible")
+            # The form was closed, remove it
+            del globals()["my_form"]
+    else:
+        # Form does not exist, create and show it
+        global my_form
+        my_form =  innerMaterialWindow()
+        my_form.Show()
 
-    # layer_imgPath = []
-    # layer_url = []
-    # layer_description = []
-    # layer_useInfo = []
-    # topic = []
-    # # print(showData.usedMatDict['outerMaterial'])
-    # if showData.usedMatDict['outerMaterial']['type'] == 'tile':
-    #     tileInfo = showData.usedMatDict['outerMaterial']['matInfo']
-    #     print(tileInfo[0])
-
-    #     for layerKey in tileInfo:
-    #         layer_imgPath.append(tileInfo[layerKey]['info']['foto1'])
-    #         layer_url.append(tileInfo[layerKey]['info']['url'])
-    #         li = ["{}: {}".format(attr, tileInfo[layerKey]['info'][attr]) for attr in chosenItem]
-    #         layer_description.append(li)
-        
-    #         temp = []
-    #         temp.append("tile_{}".format(layerKey))
-    #         # temp.append("type: tile")
-    #         temp.append("usedQuantity: {}".format(tileInfo[layerKey]['usedQuantity']))
-    #         layer_useInfo.append(temp)
-    
-
-    # elif showData.usedMatDict['outerMaterial']['type'] == 'normal':
-    #     totalInfo = showData.usedMatDict['outerMaterial']['matInfo']
-
-    #     for layerKey in totalInfo:
-    #         layer_imgPath.append(totalInfo[layerKey][0]['info'].foto1)
-    #         layer_url.append(totalInfo[layerKey][0]['info'].url)
-    #         li = ["{}: {}".format(attr, getattr(totalInfo[layerKey][0]['info'], attr, None)) for attr in chosenItem]
-    #         layer_description.append(li)
+    return 0
 
 
-    #         # For board
-    #         compPie = 0
-    #         cutPie = 0
-    #         usePie = 0
-    #         # For substructure / substructureInfill
-    #         usedLength = 0
-    #         # For substructureInfill / paint
-    #         usedArea = 0
-
-    #         for moduleKey in totalInfo[layerKey]:
-    #             if totalInfo[layerKey][moduleKey]['materialType'] == 'board':
-    #                 moduleInfo = totalInfo[layerKey][moduleKey]
-    #                 compPie += moduleInfo['completedPiece']
-    #                 cutPie += moduleInfo['cuttedPiece']
-    #                 usePie += moduleInfo['usedPiece']
-                
-    #             elif totalInfo[layerKey][moduleKey]['materialType'] == 'substructInfill':
-    #                 moduleInfo = totalInfo[layerKey][moduleKey]
-    #                 usedLength += moduleInfo['usedLength']
-    #                 usedArea += moduleInfo['usedArea']
-                
-    #             elif totalInfo[layerKey][moduleKey]['materialType'] == 'substruct':
-    #                 moduleInfo = totalInfo[layerKey][moduleKey]
-    #                 usedLength += moduleInfo['usedLength']
-                
-    #             elif totalInfo[layerKey][moduleKey]['materialType'] == 'paint':
-    #                 moduleInfo = totalInfo[layerKey][moduleKey]
-    #                 usedArea += moduleInfo['usedArea']
-
-
-    #         if totalInfo[layerKey][0]['materialType'] == 'board':
-    #             temp = []
-    #             temp.append("layer: {}".format(layerKey))
-    #             temp.append("type: board")
-    #             temp.append("usedPiece: {}".format(usePie))
-    #             temp.append("completePiece: {}".format(compPie))
-    #             temp.append("cuttedPiece: {}".format(cutPie))
-    #             layer_useInfo.append(temp)
-            
-    #         elif totalInfo[layerKey][0]['materialType'] == 'substructInfill':
-    #             temp = []
-    #             temp.append("layer: {}".format(layerKey))
-    #             temp.append("type: substructureInfill")
-    #             temp.append("usedLength: {} cm".format(usedLength))
-    #             temp.append("usedArea: {} cm2".format(usedArea))
-    #             layer_useInfo.append(temp)
-            
-    #         elif totalInfo[layerKey][0]['materialType'] == 'substruct':
-    #             temp = []
-    #             temp.append("layer: {}".format(layerKey))
-    #             temp.append("type: substructure")
-    #             temp.append("usedLength: {} cm".format(usedLength))
-    #             layer_useInfo.append(temp)
-            
-    #         elif totalInfo[layerKey][0]['materialType'] == 'paint':
-    #             temp = []
-    #             temp.append("layer: {}".format(layerKey))
-    #             temp.append("type: paint")
-    #             temp.append("usedArea: {} cm2".format(usedArea))
-    #             layer_useInfo.append(temp)
-
-
-    # imagePaths = layer_imgPath
-    # urlList = layer_url
-    # dataList = layer_description
-    # usedDataList = layer_useInfo
-
-    def show_check_box_form():
-        form = innerMaterialWindow()
-        form.Show()
-
-    # A simple function to simulate a value listener that polls for checkbox state changes
-    def poll_checkbox_states():
-        # Default to all False if not set
-        return sc.sticky.get('checkbox_states', [False] * showNum)
-
-# This would be your Grasshopper component's main run function
-# Use a timer to periodically trigger this function
-checkbox_states = poll_checkbox_states()
-# Assuming 'showForm' is a boolean input to trigger the form display
 if open:
-    sc.sticky['checkbox_states'] = [False] * showNum
-    show_check_box_form()
+    RunScript()
+else:
+    if "my_form" in globals():
+        my_form.Close()
+        del globals()["my_form"]
 

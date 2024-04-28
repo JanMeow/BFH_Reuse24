@@ -1,5 +1,5 @@
 import Rhino.Geometry as rg
-from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference, AlignPlane, EvaluateLength, LineSDL, Project, RegionUnion, ProjectPoint, PullPoint
+from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference, AlignPlane, EvaluateLength, LineSDL, Project, RegionUnion, ProjectPoint, PullPoint, BrepEdges, Explode, CurveXCurve
 import ghpythonlib.treehelpers as th
 import math
 from copy import copy, deepcopy
@@ -92,7 +92,29 @@ class NormalFacade:
         # Generate the column line, wall frame, and cut direction for the cladding
         self.columnLine, self.wallFrame, self.cutDirect = self.generateTileColumn(self.claddingGeo, self.gridDist)
 
-        
+
+##################################################################################
+        compoundMaterialObj = CompoundMaterial(self.claddingMaterial, self.DB)
+        materialList = compoundMaterialObj.new_materialList
+        material_thickness = compoundMaterialObj.thicknessList
+
+        offsetList = []
+        total = 0
+        for num in material_thickness:
+            total += num
+            offsetList.append(total)
+
+        self.normalOffsetDist = sum(material_thickness)
+        offsetList = offsetList[:-1]
+        offsetList.insert(0,0)
+
+        outterMaterial = materialList[len(materialList)-1]
+
+        self.ruler = self.createRuler(self.claddingGeo, self.wallFrame, outterMaterial.length, outterMaterial.width, outterMaterial.direction, outterMaterial.pt)
+    
+##################################################################################
+
+  
         if len(self.windowGeo)!=0 and isinstance(self.windowGeo[0], rg.Brep):
             # Get window indices and geometries from DB that match users' dimension of geometry for window.
             chosenWindowId, self.chosenWindowGeo, self.chosenWindowAttr = self.findWindow(self.windowDB, self.windowGeo, self.gridDist)
@@ -114,28 +136,14 @@ class NormalFacade:
             self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
 
 
+        
 
-        self.midCurve = self.getMidCurve(self.columnLine)
+
 
         # Generate basic wall geometry for inner material
         self.wallForInnerGeo = self.calculateInnerGeo(self.windowForFinalList, self.doorForFinalList)
 
         self.wallForFacadeGeo = self.calculateFacadeGeo(self.windowForFinalList, self.doorForFinalList)
-
-
-        compoundMaterialObj = CompoundMaterial(self.claddingMaterial, self.DB)
-        materialList = compoundMaterialObj.new_materialList
-        material_thickness = compoundMaterialObj.thicknessList
-
-        offsetList = []
-        total = 0
-        for num in material_thickness:
-            total += num
-            offsetList.append(total)
-
-        offsetCladdingDist = sum(material_thickness)
-        offsetList = offsetList[:-1]
-        offsetList.insert(0,0)
 
         # Calculate innerMaterial Part
         offsetted_surface = self.offset_brep(self.wallForFacadeGeo, offsetList, self.wallFrame)
@@ -147,6 +155,133 @@ class NormalFacade:
         self.claddingInfo = facadeObj.materialInfoDict
         # checkGeo = wallObj.checkGeo
         # allTypeMaterialModule = facadeObj.allTypeMaterialModule
+
+
+    def createRuler(self, surface, base_plane, length, width, direction, oriPt):
+        if direction:
+            firDirPlane = copy(base_plane)
+            secDirPlane = copy(base_plane)
+            secDirPlane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
+        else:
+            base_plane = copy(base_plane)
+            base_plane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
+            firDirPlane = copy(base_plane)
+            secDirPlane = copy(base_plane)
+            secDirPlane.Rotate(math.pi/2, base_plane.ZAxis, base_plane.Origin)
+        
+        crvLength, _ = InnerMaterialGenerate.create_contours(surface, firDirPlane, length, oriPt)
+        crvWidth, _ = InnerMaterialGenerate.create_contours(surface, secDirPlane, width, oriPt)
+        crvLength = [crv.ToNurbsCurve() for crv in crvLength]
+        crvWidth = [crv.ToNurbsCurve() for crv in crvWidth]
+
+        crvList = BrepEdges(surface)[0]
+        crvList = [crv.ToNurbsCurve() for crv in crvList]
+
+        crvCombine = []
+        crvCombine.extend(crvLength)
+        crvCombine.extend(crvWidth)
+        crvCombine.extend(crvList)
+
+        return crvCombine
+
+
+    def alignSystem(self, windowGeo, grid, toler, basePlane):
+        def findMoveDist(points, checkLinesDict, basePlane, direction):
+            dir = {"verti":True, "hori":False}
+            moveDir = dir[direction]
+            checkLines = checkLinesDict[direction]
+
+            xform = rg.Transform.ChangeBasis(rg.Plane.WorldXY, basePlane)
+            newPts = []
+            for pt in points:
+                newPt = deepcopy(pt)
+                newPt.Transform(xform)
+                newPts.append(newPt)
+            
+            if moveDir:
+                newPts = sorted(newPts, key=lambda pt: pt.Y)
+            else:
+                newPts = sorted(newPts, key=lambda pt: pt.X)
+
+            xform_back = rg.Transform.ChangeBasis(basePlane, rg.Plane.WorldXY)
+            for pt in newPts:
+                pt.Transform(xform_back)
+
+            # firPts: upper & right
+            # secPt: button & left
+            firPts, secPts = newPts[2:], newPts[:2]
+
+            crvDir = basePlane.YAxis if moveDir else basePlane.XAxis
+            see = []
+            wholePair_facade = []
+            for pt in newPts:
+                firMoveTrace = LineSDL(pt, crvDir, toler).ToNurbsCurve()
+                secMoveTrace = LineSDL(pt, -crvDir, toler).ToNurbsCurve()
+                see.append(firMoveTrace)
+
+                for crv in checkLines['facade']:
+                    firCutPt = CurveXCurve(crv.ToNurbsCurve(), firMoveTrace)[0]
+                    secCutPt = CurveXCurve(crv.ToNurbsCurve(), secMoveTrace)[0]
+                    if firCutPt:
+                        wholePair_facade.append((pt,firCutPt))
+                    if secCutPt:
+                        wholePair_facade.append((pt,secCutPt))
+            
+            if len(wholePair_facade)!=0:
+                wholePair_facade = sorted(wholePair_facade, key=lambda pair: pair[0].DistanceTo(pair[1]))
+                closestPair = wholePair_facade[0]
+                
+                return (rg.Vector3d(closestPair[1]-closestPair[0]), True)
+
+            else:
+                return (rg.Vector3d(0,0,0), True)
+
+        # Whole lines involved in this system, having opening lines and grid lines
+        checkLinesFacade = grid
+        checkLinesOpening = []
+
+        pt_rect = []
+        for geo in windowGeo:
+            if isinstance(geo, rg.Rectangle3d):
+                lines, vertics = Explode(geo, True)
+                pt_rect.append((vertics[:-1], geo))
+                checkLinesOpening.extend(lines)
+            elif isinstance(geo, rg.Brep):
+                lines = BrepEdges(geo)[0]
+                checkLinesOpening.extend(lines)
+                pt_rect.append(([vertex.Location for vertex in geo.Vertices], geo))
+
+        horiVec, vertiVec = basePlane.XAxis, basePlane.YAxis
+        # print("horiVec", horiVec)
+        horiLinesFacade = []
+        vertiLinesFacade = []
+        for crv in checkLinesFacade:
+            vecCrv = crv.PointAtEnd - crv.PointAtStart
+            if sum(rg.Vector3d.CrossProduct(horiVec,vecCrv))<1:
+                horiLinesFacade.append(crv)
+            else:
+                vertiLinesFacade.append(crv)
+
+        horiLinesOpening = {}
+        vertiLinesOpening = {}
+        for openId, crv in enumerate(checkLinesOpening):
+            vecCrv = crv.PointAtEnd - crv.PointAtStart
+            if rg.Vector3d.CrossProduct(horiVec,vecCrv).IsZero:
+                horiLinesOpening[openId] = crv
+            else:
+                vertiLinesOpening[openId] = crv
+
+        wholeLinesDict = {"hori":{"facade":vertiLinesFacade, "opening":vertiLinesOpening}, "verti":{"facade":horiLinesFacade, "opening":horiLinesOpening}}
+        
+        finalVec = []
+        for pts, _ in pt_rect:
+            horiVec, fixedBool = findMoveDist(pts, wholeLinesDict, basePlane, 'hori')
+            vertiVec, fixedBool = findMoveDist(pts, wholeLinesDict, basePlane, 'verti')
+            crossVec = rg.Vector3d.Add(horiVec, vertiVec)
+
+            finalVec.append(crossVec)
+
+        return finalVec
 
 
         
@@ -682,7 +817,14 @@ class NormalFacade:
             # Orient chosenGeoOnUserGeo from user's geometry central plane to wall
             trans2 = rg.Transform.PlaneToPlane(windowFrame, windowFrameOnWall)
             chosenGeoOnWallGeo = copy(chosenGeoOnUserGeo)
-            chosenGeoOnWallGeo.Transform(trans2)
+            chosenGeoOnWallGeo.Transform(trans2)  # chosen Opening is placed onto the wall
+
+            #######################
+            vec = self.alignSystem([chosenGeoOnWallGeo], self.ruler, 10, self.wallFrame)
+            transOnRuler = rg.Transform.Translation(vec[0])
+            chosenGeoOnWallGeoOnRuler = copy(chosenGeoOnWallGeo)
+            chosenGeoOnWallGeoOnRuler.Transform(transOnRuler)#################################################
+
 
             # Orient XYPlane, which is DB default plane, onto the wall and align to grid
             XYPlaneOnUserGeo = copy(rg.Plane.WorldXY)
@@ -701,10 +843,10 @@ class NormalFacade:
             windowForFinal = copy(finalWindowGeo)
             # windowForFinal.Transform(trans4)
 
-
             orientedWindowGeoList.append(finalWindowGeo)
             finalWindowPlaneList.append(finalWindowPlane)
-            windowForFinalList.append(windowForFinal)
+            # windowForFinalList.append(windowForFinal) ################# original
+            windowForFinalList.append(chosenGeoOnWallGeoOnRuler) ################# original
 
         return (orientedWindowGeoList, finalWindowPlaneList, windowForFinalList)
 
@@ -816,6 +958,12 @@ class NormalFacade:
             chosenGeoOnWallGeo = copy(chosenGeoOnUserGeo)
             chosenGeoOnWallGeo.Transform(trans2)
 
+            vec = self.alignSystem([chosenGeoOnWallGeo], self.ruler, 10, self.wallFrame)
+            transOnRuler = rg.Transform.Translation(vec[0])
+            chosenGeoOnWallGeoOnRuler = copy(chosenGeoOnWallGeo)
+            chosenGeoOnWallGeoOnRuler.Transform(transOnRuler)#################################################
+
+
             # Orient XYPlane, which is DB default plane, onto the wall and align to grid
             XYPlaneOnUserGeo = copy(rg.Plane.WorldXY)
             XYPlaneOnUserGeo.Transform(trans1)
@@ -837,7 +985,8 @@ class NormalFacade:
 
             orientedDoorGeoList.append(finalDoorGeo)
             finalDoorPlaneList.append(finalDoorPlane)
-            doorForFinalList.append(doorForFinal)
+            # doorForFinalList.append(doorForFinal) ############################### original
+            doorForFinalList.append(chosenGeoOnWallGeoOnRuler) ##################################
 
         return (orientedDoorGeoList, finalDoorPlaneList, doorForFinalList)
      
