@@ -114,30 +114,35 @@ class NormalFacade:
     
 ##################################################################################
 
-  
-        if len(self.windowGeo)!=0 and isinstance(self.windowGeo[0], rg.Brep):
-            # Get window indices and geometries from DB that match users' dimension of geometry for window.
-            chosenWindowId, self.chosenWindowGeo, self.chosenWindowAttr = self.findWindow(self.windowDB, self.windowGeo, self.gridDist)
-            # Orient window and door onto grid system
-            self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
-        else:
-            self.chosenWindowGeo, self.chosenWindowAttr = self.buildWindow(self.windowGeo)
-            # Orient window and door onto grid system
-            self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
-
-        if len(self.doorGeo)!=0 and isinstance(self.doorGeo[0], rg.Brep):
-            # Get window indices and geometries from DB that match users' dimension of geometry for window.
-            chosenDoorId, self.chosenDoorGeo, self.chosenDoorAttr = self.findDoor(self.doorDB, self.doorGeo, self.gridDist)
-            # Orient window and door onto grid system
-            self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
-        else:
-            self.chosenDoorGeo, self.chosenDoorAttr = self.buildDoor(self.doorGeo)
-            # Orient window and door onto grid system
-            self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
-
-
+        self.chosenWindowGeo, self.chosenWindowAttr = [], []
+        self.chosenDoorGeo, self.chosenDoorAttr = [], []
+        if len(self.windowGeo)!=0:
+            for wGeo in self.windowGeo:
+                if isinstance(wGeo, rg.Brep):
+                    _, oneChosenWindowGeo, oneChosenWindowAttr = self.findWindow(self.windowDB, [wGeo], self.gridDist)
+                    self.chosenWindowGeo.extend(oneChosenWindowGeo)
+                    self.chosenWindowAttr.extend(oneChosenWindowAttr)
+                else:
+                    oneChosenWindowGeo, oneChosenWindowAttr = self.buildWindow([wGeo])
+                    self.chosenWindowGeo.extend(oneChosenWindowGeo)
+                    self.chosenWindowAttr.extend(oneChosenWindowAttr)
         
+        if len(self.doorGeo)!=0:
+            for dGeo in self.doorGeo:
+                if isinstance(dGeo, rg.Brep):
+                    _, oneChosenDoorGeo, oneChosenDoorAttr = self.findDoor(self.doorDB, [dGeo], self.gridDist)
+                    self.chosenDoorGeo.extend(oneChosenDoorGeo)
+                    self.chosenDoorAttr.extend(oneChosenDoorAttr)
+                else:
+                    oneChosenDoorGeo, oneChosenDoorAttr = self.buildDoor([dGeo])
+                    self.chosenDoorGeo.extend(oneChosenDoorGeo)
+                    self.chosenDoorAttr.extend(oneChosenDoorAttr)
+            
 
+        # Orient window and door onto grid system
+        self.orientedWindowGeoList, self.finalWindowPlaneList, self.windowForFinalList = self.orientWindow(self.columnLine, self.windowGeo, self.chosenWindowGeo, self.claddingGeo)
+        # Orient window and door onto grid system
+        self.orientedDoorGeoList, self.finalDoorPlaneList, self.doorForFinalList = self.orientDoor(self.columnLine, self.doorGeo, self.chosenDoorGeo, self.claddingGeo)
 
 
         # Generate basic wall geometry for inner material

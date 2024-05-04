@@ -293,12 +293,6 @@ else:
     ghenv.Component.AddRuntimeMessage(ghkernel.GH_RuntimeMessageLevel.Warning, "Carrier is empty.")
     goExecute = False
 
-if len(Window_Geometry) != 0:
-    if isinstance(Window_Geometry[0], rg.Brep):
-        Window_Geometry = [flattenBrep(win) for win in Window_Geometry]
-if len(Door_Geometry) != 0:
-    if isinstance(Door_Geometry[0], rg.Brep):
-        Door_Geometry = [flattenBrep(door) for door in Door_Geometry]
 # ==============================================================================
 if len(setTile) == 0:
     ghenv.Component.AddRuntimeMessage(ghkernel.GH_RuntimeMessageLevel.Warning, "setTile is empty.")

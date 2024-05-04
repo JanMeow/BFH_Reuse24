@@ -36,7 +36,7 @@ def create_label_with_font(text, font_size, font_family="Arial"):
 def create_white_image(width, height):
     """Create a white bitmap image of specified width and height."""
     white_image = drawing.Bitmap(width, height, drawing.PixelFormat.Format32bppRgb)
-    text = "     _(:3 」∠ )_\n Image not found"
+    text = "  ฅ^•ﻌ•^ฅ  ฅ^•ﻌ•^ฅ\n Image not found"
     with drawing.Graphics(white_image) as g:
         g.Clear(drawing.Colors.Gray)  # Fill the image with white color
         font = drawing.Font("Arial", 12)  # You can adjust the font and size
