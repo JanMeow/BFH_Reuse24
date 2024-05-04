@@ -18,8 +18,8 @@ class ObjFromRH:
 # Check inputs of component is none.
 if objAttr == None:
     attr_dict = {
-    'bauteil_obergruppe': 'unknown',
-    'bauteil_gruner': 'unknown',
+    'bauteil_obergruppe': 'other_' + str(uuid.uuid4()),
+    'bauteil_gruner': 'other_' + str(uuid.uuid4()),
     'uuid': 'structAndFill_uuid_' + str(uuid.uuid4()),
     'kosten': 'unknown',
     'zustand': 'unknown',

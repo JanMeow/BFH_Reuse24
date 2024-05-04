@@ -332,6 +332,7 @@ class GenerateCladding:
                     if success:
                         # 3. Evaluate the Surface at the UV Parameters
                         success, surf_Frame = surf.FrameAt(uvPU, uvPV)
+                        surf_Frame = self.alignToZ(surf_Frame)
                         # if success:
                             # surf_Frame now contains the frame (plane) at the closest point
                             # Do something with surf_Frame, e.g., access its origin or its normal
@@ -446,6 +447,8 @@ class GenerateCladding:
                     if success:
                         # 3. Evaluate the Surface at the UV Parameters
                         success, surf_Frame = surf.FrameAt(uvPU, uvPV)
+                        surf_Frame = self.alignToZ(surf_Frame)
+
                         # if success:
                             # surf_Frame now contains the frame (plane) at the closest point
                             # Do something with surf_Frame, e.g., access its origin or its normal
@@ -729,12 +732,18 @@ class GenerateCladding:
                 success, windowFrame = windowGeo.FrameAt(uvPU, uvPV)
                 windowFrame = self.alignToZ(windowFrame)
                 windowFrameOrigin = windowFrame.Origin
+                # self.check = windowFrame
+
             
             # Get frame that closest to user's geometry's centroid
             success, uvPU, uvPV = wallGeo.ClosestPoint(windowFrameOrigin)
             if success:
                 success, windowFrameOnWall = wallGeo.FrameAt(uvPU, uvPV)
                 windowFrameOnWall = self.alignToZ(windowFrameOnWall)
+
+                # self.check = windowFrameOnWall
+                # print(windowFrameOnWall)
+
             
             area_properties = rg.AreaMassProperties.Compute(chosenGeo)
             if area_properties is not None:
@@ -746,6 +755,7 @@ class GenerateCladding:
             trans1 = rg.Transform.PlaneToPlane(orientPlane, windowFrame)
             chosenGeoOnUserGeo = copy(chosenGeo)
             chosenGeoOnUserGeo.Transform(trans1)
+            self.check2 = chosenGeo
 
             # Orient chosenGeoOnUserGeo from user's geometry central plane to wall
             trans2 = rg.Transform.PlaneToPlane(windowFrame, windowFrameOnWall)
@@ -759,6 +769,7 @@ class GenerateCladding:
             XYPlaneOnWallGeo.Transform(trans2)
             closestPoint = find_closest_point_on_lines(XYPlaneOnWallGeo.Origin, claddingLine)
             finalWindowPlane = rg.Plane(closestPoint, XYPlaneOnWallGeo.XAxis, XYPlaneOnWallGeo.YAxis)
+            self.check = finalWindowPlane
 
             # Orient chosenWindowGeo to final position
             finalWindowGeo = copy(chosenGeoOnWallGeo)
@@ -867,6 +878,10 @@ class GenerateCladding:
             if success:
                 success, doorFrameOnWall = wallGeo.FrameAt(uvPU, uvPV)
                 doorFrameOnWall = self.alignToZ(doorFrameOnWall)
+
+                # if not self.claddingDirection:
+                #     doorFrameOnWall.Rotate(math.pi/2, doorFrameOnWall.ZAxis, doorFrameOnWall.Origin) #####################################
+            
             
             area_properties = rg.AreaMassProperties.Compute(chosenGeo)
             if area_properties is not None:

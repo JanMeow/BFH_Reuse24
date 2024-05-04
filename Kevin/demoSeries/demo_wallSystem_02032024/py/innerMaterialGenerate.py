@@ -1,5 +1,5 @@
 import Rhino.Geometry as rg
-from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference, AlignPlane, EvaluateLength, LineSDL, Project, RegionUnion, ProjectPoint, PullPoint
+from ghpythonlib.components import Area, SurfaceClosestPoint, EvaluateSurface, SurfaceSplit, Extrude, OffsetCurve, BoundarySurfaces, TrimwithRegions, JoinCurves, RegionDifference, AlignPlane, EvaluateLength, LineSDL, Project, RegionUnion, ProjectPoint, PullPoint, BrepEdges, CurveProximity, JoinCurves
 import ghpythonlib.treehelpers as th
 import math
 from copy import copy, deepcopy
@@ -71,10 +71,6 @@ class InnerMaterialGenerate:
 
                     allTypeGeoModule = []
                     if matType == "board":
-                        # if mat.searchDB:
-                        #     useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.DBwidth, mat.DBlength, mat.DBthickness, mat.attrList, mat.direction, mat.pt
-                        # else:
-                        #     useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.width, mat.length, mat.thickness, mat.attrList, mat.direction, mat.pt
                         
                         useWidth, useLength, useDepth, useMatAttr, useDirect, usePt = mat.width, mat.length, mat.thickness, mat.attrList, mat.direction, mat.pt
 
@@ -125,29 +121,40 @@ class InnerMaterialGenerate:
     def create_module_byCurve(self, surface, base_plane, curves, crvDist):
         newCurve = []
         midPtList = []
+        oriCurve = []
         for crv in curves:
             midPtList.append(crv.PointAtNormalizedLength(0.5))
             crv = crv.Extend(rg.CurveEnd.Start, 10000, 0)
             crv = crv.Extend(rg.CurveEnd.End, 10000, 0)
+            oriCurve.append(crv)
             crv1 = crv.Offset(base_plane, crvDist/2, 0.1, 0)[0]
             crv2 = crv.Offset(base_plane, -crvDist/2, 0.1, 0)[0]
             newCurve.append(crv1)
             newCurve.append(crv2)
 
         projectMidPt = ProjectPoint(midPtList, base_plane.ZAxis, surface)[0]
+        if isinstance(projectMidPt, rg.Point3d):
+            projectMidPt = [projectMidPt]
         projectCurves = Project(newCurve, surface, base_plane.ZAxis)
+        pCurvesOriginal = Project(oriCurve, surface, base_plane.ZAxis)
         surfaceList = SurfaceSplit(surface, projectCurves)
-        # print(surfaceList)
         surfaceList = self.sortSurface(surfaceList, base_plane)
 
         chosenSrf = []
         for srf in surfaceList:
             delete = False
-            for midPt in projectMidPt:
-                closPt, closDist = PullPoint(midPt, srf)
-                if closDist < 0.1: ################################################################################
-                    delete = True
-            
+            edges = BrepEdges(srf)[0]
+
+            if not isinstance(pCurvesOriginal, list):
+                pCurvesOriginal = [pCurvesOriginal]
+
+            for e in edges:
+                for pCrv in pCurvesOriginal:
+                    crvDist = CurveProximity(e, pCrv)[2]
+                    if crvDist < 0.1:
+                        delete = True
+                        continue
+                        
             if not delete:
                 chosenSrf.append(srf)
 
@@ -293,6 +300,8 @@ class InnerMaterialGenerate:
         boardSeam = 2
         # print("=====================")
         # print(panelGeoList)
+        if not isinstance(panelGeoList, list):
+            panelGeoList = [panelGeoList]
         for panel in panelGeoList:
             panelOffsetList.append(Extrude(panel, base_plane.ZAxis*thickness))
 
@@ -402,7 +411,7 @@ class InnerMaterialGenerate:
             # panelOffsetSrf = offset_surface_inner(surface, base_plane, width/2)
             panelOffsetSrf = panel
 
-            panelOffsetList.append(Extrude(panelOffsetSrf, base_plane.ZAxis*thickness*0.8))
+            panelOffsetList.append(Extrude(panelOffsetSrf, base_plane.ZAxis*thickness*0.95))
 
             area_properties = rg.AreaMassProperties.Compute(panelOffsetSrf)
             if area_properties is not None:

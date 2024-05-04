@@ -406,6 +406,7 @@ class NormalFacade:
                     if success:
                         # 3. Evaluate the Surface at the UV Parameters
                         success, surf_Frame = surf.FrameAt(uvPU, uvPV)
+                        surf_Frame = self.alignToZ(surf_Frame)
                         # if success:
                             # surf_Frame now contains the frame (plane) at the closest point
                             # Do something with surf_Frame, e.g., access its origin or its normal
@@ -542,6 +543,7 @@ class NormalFacade:
                     if success:
                         # 3. Evaluate the Surface at the UV Parameters
                         success, surf_Frame = surf.FrameAt(uvPU, uvPV)
+                        surf_Frame = self.alignToZ(surf_Frame)
                         # if success:
                             # surf_Frame now contains the frame (plane) at the closest point
                             # Do something with surf_Frame, e.g., access its origin or its normal
