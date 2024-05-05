@@ -362,12 +362,8 @@ for output in outputs:
 # ==============================================================================
 
 
-carrierTree, windowTree, doorTree, crvTree = categorize(carrierGeoFlat, Window_Geometry, Door_Geometry, moduleCurve)
-
-# goExecute = False
-
-
 if goExecute:
+    carrierTree, windowTree, doorTree, crvTree = categorize(carrierGeoFlat, Window_Geometry, Door_Geometry, moduleCurve)
     if init:
         # initial_data is for tile calculation
         initial_data = {}
