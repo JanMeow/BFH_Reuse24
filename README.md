@@ -1,8 +1,11 @@
 # BFH_Reuse24
 BFH 24 Spring Studio – Scripts Development
 
+Visit the course website I built for more informato n
+[https://bfhreuse24.site/
+](url)
 This repository contains 
-1. WEb page for materials library for a soon-to-be deconstructured  building by Roche
+1. Web page for materials library for a soon-to-be deconstructured building by Roche 
 2. a collection of scripts developed for the BFH 24 Spring Studio, focused on transforming structural line inputs into a graph-based data structure and querying a database for the closest matching components.
 
 Key Features:
