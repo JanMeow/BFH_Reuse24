@@ -1,7 +1,7 @@
 # BFH_Reuse24
 BFH 24 Spring Studio – Scripts Development
 
-Visit the course website I built for more informato n
+Visit the course website I built for more informaton
 [https://bfhreuse24.site/
 ](url)
 This repository contains 
