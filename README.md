@@ -2,7 +2,7 @@
 BFH 24 Spring Studio – Scripts Development
 
 Visit the course website I built for more informaton
-[BFH material Library](url)](https://bfhreuse24.site/)
+(url)](https://bfhreuse24.site/)
 
 
 The current repository contains 
